@@ -14,18 +14,21 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from varshadrishti import contract as c  # noqa: E402
 
-FORECAST = ROOT / "forecast"
+@pytest.fixture(scope="module")
+def forecast_dir(tmp_path_factory):
+    """Fixture areas in a temp dir — never touches the real forecast/ that P2 populates."""
+    out = tmp_path_factory.mktemp("forecast")
+    subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "make_mock_forecast.py"),
+         "--valid-from", "2026-09-19", "--fixture", "--out", str(out)],
+        check=True, capture_output=True,
+    )
+    return out
 
 
 @pytest.fixture(scope="module")
-def generated():
-    """Regenerate into a temp-free location so tests run against fresh output."""
-    subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "make_mock_forecast.py"),
-         "--valid-from", "2026-09-19"],
-        check=True, capture_output=True,
-    )
-    return json.loads((FORECAST / "latest.json").read_text())
+def generated(forecast_dir):
+    return json.loads((forecast_dir / "latest.json").read_text())
 
 
 # --- the emitted files validate ------------------------------------------
@@ -35,20 +38,20 @@ def test_latest_validates(generated):
     c.validate(generated, "forecast.schema.json")
 
 
-def test_index_validates():
-    c.load_and_validate(FORECAST / "index.json", "index.schema.json")
+def test_index_validates(forecast_dir):
+    c.load_and_validate(forecast_dir / "index.json", "index.schema.json")
 
 
-def test_every_area_file_validates():
-    files = list((FORECAST / "area").glob("*.json"))
+def test_every_area_file_validates(forecast_dir):
+    files = list((forecast_dir / "area").glob("*.json"))
     assert files, "no area files emitted"
     for f in files:
         c.load_and_validate(f, "area.schema.json")
 
 
-def test_archive_copy_written(generated):
+def test_archive_copy_written(generated, forecast_dir):
     stamp = generated["meta"]["valid_from"]
-    c.load_and_validate(FORECAST / "archive" / f"{stamp}.json", "forecast.schema.json")
+    c.load_and_validate(forecast_dir / "archive" / f"{stamp}.json", "forecast.schema.json")
 
 
 # --- invariants the app depends on ---------------------------------------
@@ -62,21 +65,21 @@ def test_all_probabilities_in_unit_interval(generated):
                 assert 0.0 <= v <= 1.0, f"{aid}.{head}.{lead} = {v}"
 
 
-def test_farmer_payload_within_2g_budget():
-    for f in (FORECAST / "area").glob("*.json"):
+def test_farmer_payload_within_2g_budget(forecast_dir):
+    for f in (forecast_dir / "area").glob("*.json"):
         size = f.stat().st_size
         assert size <= c.AREA_FILE_MAX_BYTES, f"{f.name} is {size} B"
 
 
-def test_area_file_matches_latest_for_same_area(generated):
+def test_area_file_matches_latest_for_same_area(generated, forecast_dir):
     """The two paths must never disagree — officer and farmer see the same numbers."""
-    for f in (FORECAST / "area").glob("*.json"):
+    for f in (forecast_dir / "area").glob("*.json"):
         body = json.loads(f.read_text())["forecast"]
         assert body == generated["areas"][body["area_id"]]
 
 
-def test_index_covers_every_area(generated):
-    idx = json.loads((FORECAST / "index.json").read_text())["areas"]
+def test_index_covers_every_area(generated, forecast_dir):
+    idx = json.loads((forecast_dir / "index.json").read_text())["areas"]
     assert set(idx) == set(generated["areas"]), "index and latest.json disagree on areas"
 
 

@@ -68,16 +68,16 @@ def main():
     failed = []
 
     for year in range(args.start, args.end + 1):
-        for attempt in (1, 2):
+        for attempt in (1, 2, 3, 4):  # CHC resets connections on large range reads
             try:
                 pull_year(year, start_md, end_md)
                 break
             except Exception as exc:  # noqa: BLE001
                 log(f"{year} attempt {attempt} failed: {exc}")
-                if attempt == 2:
+                if attempt == 4:
                     failed.append(year)
                 else:
-                    time.sleep(10)
+                    time.sleep(15 * attempt)
 
     files = list(OUT.glob("*.nc"))
     total = sum(f.stat().st_size for f in files) / 1e6

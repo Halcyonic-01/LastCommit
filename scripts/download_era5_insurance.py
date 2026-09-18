@@ -1,77 +1,104 @@
-"""P0 insurance: ERA5-Land daily rainfall for the Karnataka IMD grid cells.
+"""ERA5-Land daily rainfall for the Karnataka IMD cells — fallback truth if IMD Pune dies.
 
-Fallback truth data if the IMD Pune download stalls or dies. Same points,
-same date range, same downstream code path as the IMD grid - less accurate,
-but instantly available.
+Same points, same range, same downstream path as the IMD grid; less accurate but always
+available. Uses the 324 cells the weight matrix actually references, not the 551-cell bbox.
 
-The archive API times out on a 34-year single request, so this chunks on
-BOTH axes: 5-year date blocks x batches of locations. Every chunk is cached
-to disk and skipped on re-run, so the job is resumable and can be left
-running while IMD downloads in parallel.
-
-Grid: IMD 0.25 deg cells inside the Karnataka bbox (lat 11.5-18.5, lon 74.0-78.6)
-      = 29 x 19 = 551 cells (~300 are land; the sea cells are dropped at P2
-      when real boundaries arrive).
-Cost: ~127 MB raw JSON, ~20-40 min.
+The archive API weights a call by locations x time range, so this chunks on both axes and
+caches every chunk to disk. Resumable: a rerun skips what is already there.
 """
 
+import argparse
 import json
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
+import pandas as pd
+
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "data" / "openmeteo" / "era5"
-
-LAT0, LAT1 = 11.5, 18.5
-LON0, LON1 = 74.0, 78.6
-STEP = 0.25
-
-CHUNKS = [
-    ("1991-01-01", "1995-12-31"),
-    ("1996-01-01", "2000-12-31"),
-    ("2001-01-01", "2005-12-31"),
-    ("2006-01-01", "2010-12-31"),
-    ("2011-01-01", "2015-12-31"),
-    ("2016-01-01", "2020-12-31"),
-    ("2021-01-01", "2024-12-31"),
-]
-# Open-Meteo's free tier weights a call by locations x time range, not by
-# request count. 25 locations x 5 years tripped HTTP 429 within a minute.
-BATCH = 10
+OUT = ROOT / "data" / "raw" / "era5"
+WEIGHTS = ROOT / "data" / "processed"
 API = "https://archive-api.open-meteo.com/v1/archive"
+
+# Only the monsoon season is ever used. May 1 covers the 30-day lookback from a June 1 onset,
+# so full calendar years were ~3x wasted volume against a rate limit weighted by time range.
+SEASON = ("05-01", "10-31")
+YEARS = range(1991, 2025)
+CHUNKS = [(f"{y}-{SEASON[0]}", f"{y}-{SEASON[1]}") for y in YEARS]
+
+# 184 days instead of 1826 means a 50-cell batch sits well under the ~299 KB truncation ceiling.
+BATCH = 50
 
 
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def grid():
-    n_lat = int(round((LAT1 - LAT0) / STEP)) + 1
-    n_lon = int(round((LON1 - LON0) / STEP)) + 1
-    return [
-        (round(LAT0 + STEP * i, 2), round(LON0 + STEP * j, 2))
-        for i in range(n_lat)
-        for j in range(n_lon)
-    ]
+def cells():
+    frames = [pd.read_parquet(p) for p in WEIGHTS.glob("weights_imd_*.parquet")]
+    if not frames:
+        raise SystemExit("no IMD weight matrices — run scripts/build_geo.py first")
+    w = pd.concat(frames)
+    c = w[["cell_id", "lat", "lon"]].drop_duplicates().sort_values("cell_id")
+    return c.reset_index(drop=True)
 
 
-def fetch(lats, lons, start, end, tries=4):
-    url = (
-        f"{API}?latitude={','.join(map(str, lats))}"
-        f"&longitude={','.join(map(str, lons))}"
-        f"&start_date={start}&end_date={end}"
-        f"&daily=precipitation_sum&timezone=GMT"
-    )
+def _is_hourly_cap(exc) -> bool:
+    """Open-Meteo returns 429 both for burst throttling and for the hard hourly cap."""
+    try:
+        return "hourly" in exc.read().decode("utf-8", "ignore").lower()
+    except Exception:  # noqa: BLE001
+        return False
+
+
+CAP_POLL = 300  # the cap may reset on a fixed hour or roll continuously — poll, don't guess
+
+
+def fetch_adaptive(lats, lons, start, end):
+    """Open-Meteo truncates large payloads at ~299 KB. Halve the batch and retry on that."""
+    try:
+        return fetch(lats, lons, start, end)
+    except json.JSONDecodeError:
+        if len(lats) == 1:
+            raise
+        mid = len(lats) // 2
+        log(f"    truncated payload; splitting {len(lats)} -> {mid}+{len(lats) - mid}")
+        left = fetch_adaptive(lats[:mid], lons[:mid], start, end)
+        right = fetch_adaptive(lats[mid:], lons[mid:], start, end)
+        as_list = lambda p: p if isinstance(p, list) else [p]  # noqa: E731
+        return as_list(left) + as_list(right)
+
+
+def fetch(lats, lons, start, end, tries=8):
+    qs = urllib.parse.urlencode({
+        "latitude": ",".join(f"{v:.4f}" for v in lats),
+        "longitude": ",".join(f"{v:.4f}" for v in lons),
+        "start_date": start,
+        "end_date": end,
+        "daily": "precipitation_sum",
+        "timezone": "GMT",
+    })
     for attempt in range(1, tries + 1):
         try:
-            with urllib.request.urlopen(url, timeout=180) as r:
+            with urllib.request.urlopen(f"{API}?{qs}", timeout=240) as r:
                 return json.loads(r.read())
+        except json.JSONDecodeError:
+            raise  # handled by fetch_adaptive, which halves the batch
         except Exception as exc:  # noqa: BLE001
             throttled = isinstance(exc, urllib.error.HTTPError) and exc.code == 429
-            wait = 300 if throttled else 10 * attempt
+            # DNS/connection blips need a longer pause than a plain retry
+            netfail = isinstance(exc, urllib.error.URLError) and not isinstance(
+                exc, urllib.error.HTTPError
+            )
+            if throttled and _is_hourly_cap(exc):
+                # a hard hourly cap — seconds of backoff are pointless; poll until it frees
+                log(f"    hourly API cap hit; re-checking in {CAP_POLL // 60} min")
+                time.sleep(CAP_POLL)
+                continue  # does not consume an attempt
+            wait = 120 if throttled else (60 if netfail else 10 * attempt)
             log(f"    attempt {attempt} failed ({exc}); retry in {wait}s")
             if attempt == tries:
                 raise
@@ -80,37 +107,41 @@ def fetch(lats, lons, start, end, tries=4):
 
 
 def main():
-    OUT.mkdir(parents=True, exist_ok=True)
-    cells = grid()
-    log(f"{len(cells)} grid cells x {len(CHUNKS)} date chunks")
-    t0 = time.time()
-    done = skipped = 0
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--sleep", type=float, default=4.0, help="spacing between calls")
+    args = ap.parse_args()
 
+    OUT.mkdir(parents=True, exist_ok=True)
+    grid = cells()
+    total = len(CHUNKS) * ((len(grid) + BATCH - 1) // BATCH)
+    log(f"{len(grid)} cells x {len(CHUNKS)} date chunks = {total} requests")
+
+    t0, done, skipped = time.time(), 0, 0
     for start, end in CHUNKS:
-        for b in range(0, len(cells), BATCH):
-            batch = cells[b : b + BATCH]
-            tag = f"{start[:4]}_{end[:4]}_b{b // BATCH:03d}"
+        for b in range(0, len(grid), BATCH):
+            chunk = grid.iloc[b : b + BATCH]
+            tag = f"{start[:4]}_b{b // BATCH:03d}"
             dest = OUT / f"{tag}.json"
             if dest.exists() and dest.stat().st_size > 1000:
                 skipped += 1
                 continue
-            lats = [c[0] for c in batch]
-            lons = [c[1] for c in batch]
-            t = time.time()
-            payload = fetch(lats, lons, start, end)
-            dest.write_text(json.dumps(payload))
-            done += 1
-            log(
-                f"  {tag}: {len(batch)} pts, {dest.stat().st_size / 1024:.0f} KB, "
-                f"{time.time() - t:.1f}s"
-            )
-            time.sleep(6)  # stay under the free tier's weighted rate limit
 
-    total = sum(f.stat().st_size for f in OUT.glob("*.json")) / 1e6
-    log(
-        f"FINISHED in {(time.time() - t0) / 60:.1f} min | "
-        f"fetched={done} skipped={skipped} | {total:.0f} MB on disk"
-    )
+            payload = fetch_adaptive(list(chunk["lat"]), list(chunk["lon"]), start, end)
+            items = payload if isinstance(payload, list) else [payload]
+            dest.write_text(json.dumps({
+                "cell_ids": list(chunk["cell_id"]),
+                "start": start,
+                "end": end,
+                "data": items,
+            }, separators=(",", ":")))
+            done += 1
+            if done % 20 == 0:
+                log(f"  {done + skipped}/{total} chunks ({time.time() - t0:.0f}s elapsed)")
+            time.sleep(args.sleep)
+
+    size = sum(f.stat().st_size for f in OUT.glob("*.json")) / 1e6
+    log(f"FINISHED in {(time.time() - t0) / 60:.1f} min | fetched={done} skipped={skipped} "
+        f"| {size:.0f} MB, {len(list(OUT.glob('*.json')))} chunks")
     return 0
 
 
