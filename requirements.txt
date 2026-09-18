@@ -1,0 +1,33 @@
+# Data
+imdlib==0.1.21
+xarray
+netCDF4
+rioxarray
+
+# Geospatial
+geopandas
+shapely
+pyproj
+fiona
+
+# Model
+pandas
+numpy
+lightgbm
+scikit-learn
+pyarrow
+
+# Rules + pipeline
+PyYAML
+requests
+python-dotenv
+
+# Charts (offline verification plots)
+matplotlib
+
+# Backend services
+supabase
+python-telegram-bot
+
+# Dev
+pytest

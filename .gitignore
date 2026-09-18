@@ -1,39 +1,51 @@
-# Python
-.venv/
-__pycache__/
-*.pyc
-.ipynb_checkpoints/
+# Single .gitignore for the whole project — do not add per-directory ones.
+# (.pytest_cache/ writes its own; it is ignored wholesale below.)
 
-# Raw bulk data — regenerate with scripts/, never commit (~825 MB)
-data/rain/
-data/imd/
-data/openmeteo/raw/
-data/boundaries/raw/
+# Internal planning doc — stays local, never pushed
+IMPLEMENTATION_PLAN.md
+
+# Bulk + re-downloadable data. scripts/ regenerates all of it in ~22 min.
+# Note: `data/raw/*` not `data/raw/` — git cannot un-ignore inside an ignored dir.
+data/raw/*
+data/interim/*
+data/processed/*.parquet
 *.grd
 *.GRD
 *.nc
 
-# Large intermediates
-data/features/*.parquet
+# Tracked: daily EC46 responses, so a demo survives an Open-Meteo outage
+!data/cache/
+
+# Trained model binaries (metrics JSON is tracked)
 models/*.pkl
-models/*.txt
+models/*.joblib
+models/*.lgb
+
+# Logs and scratch
+logs/
+*.log
+.ipynb_checkpoints/
 
 # Secrets
 .env
-.env.local
+.env.*
+!.env.example
 *.key
+*.pem
 secrets/
 
-# Node
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Node / web
 node_modules/
-dist/
+web/dist/
+web/.vite/
 .vercel/
 
 # OS
 .DS_Store
-
-# --- Deliberately TRACKED (do not ignore) ---
-# data/indices/       small text, reproducible provenance
-# data/openmeteo/cache/  daily EC46 responses — survives API outage
-# forecast/           static JSON served to the PWA
-# geo/                simplified <1 MB GeoJSON
