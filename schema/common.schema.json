@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://varshadrishti.dev/schema/common.schema.json",
+  "title": "VarshaDrishti shared definitions",
+  "$defs": {
+    "probability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "leadSet": {
+      "description": "One probability per lead week. w1 = days 1-7 ... w4 = days 22-28.",
+      "type": "object",
+      "required": ["w1", "w2", "w3", "w4"],
+      "additionalProperties": false,
+      "properties": {
+        "w1": { "$ref": "#/$defs/probability" },
+        "w2": { "$ref": "#/$defs/probability" },
+        "w3": { "$ref": "#/$defs/probability" },
+        "w4": { "$ref": "#/$defs/probability" }
+      }
+    },
+    "areaId": {
+      "description": "LGD code once P2 lands; MOCK-* placeholder until then.",
+      "type": "string",
+      "pattern": "^(MOCK-[A-Za-z0-9_-]+|[0-9]{1,10})$",
+      "minLength": 1,
+      "maxLength": 40
+    },
+    "level": {
+      "enum": ["state", "district", "block", "panchayat"]
+    },
+    "onsetStatus": {
+      "description": "Where this area is in the season. Drives which advisories can fire.",
+      "enum": ["pre_onset", "false_onset_risk", "onset_confirmed", "in_season", "withdrawn"]
+    },
+    "confidence": {
+      "enum": ["low", "medium", "high"]
+    },
+    "severity": {
+      "enum": ["info", "watch", "warn", "critical"]
+    },
+    "centroid": {
+      "description": "[lon, lat] — GeoJSON axis order.",
+      "type": "array",
+      "prefixItems": [
+        { "type": "number", "minimum": 68, "maximum": 98 },
+        { "type": "number", "minimum": 6, "maximum": 38 }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "advisory": {
+      "description": "One agronomic action. Every advisory MUST cite a CRIDA table - no citation, no advisory.",
+      "type": "object",
+      "required": [
+        "rule_id",
+        "crop",
+        "stage",
+        "severity",
+        "action_en",
+        "action_kn",
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "crop": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "stage": {
+          "enum": ["pre_sowing", "sowing", "vegetative", "flowering", "maturity", "any"]
+        },
+        "severity": { "$ref": "#/$defs/severity" },
+        "action_en": { "type": "string", "minLength": 5, "maxLength": 300 },
+        "action_kn": { "type": "string", "minLength": 2, "maxLength": 300 },
+        "confidence_word_en": { "type": "string", "maxLength": 40 },
+        "confidence_word_kn": { "type": "string", "maxLength": 60 },
+        "source": {
+          "type": "object",
+          "required": ["doc", "table"],
+          "additionalProperties": false,
+          "properties": {
+            "doc": { "type": "string", "minLength": 5, "maxLength": 200 },
+            "table": { "type": "string", "minLength": 1, "maxLength": 40 },
+            "district": { "type": "string", "maxLength": 60 }
+          }
+        }
+      }
+    },
+    "forecastBody": {
+      "description": "The per-area payload. Identical in latest.json and area/<id>.json.",
+      "type": "object",
+      "required": [
+        "area_id",
+        "name_en",
+        "level",
+        "p_onset",
+        "p_false_onset",
+        "p_dry7",
+        "p_dry14",
+        "p_heavy",
+        "onset_status",
+        "confidence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "area_id": { "$ref": "#/$defs/areaId" },
+        "lgd_code": {
+          "description": "Null until P2 wires real LGD codes.",
+          "type": ["string", "null"]
+        },
+        "name_en": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "name_kn": { "type": "string", "maxLength": 80 },
+        "level": { "$ref": "#/$defs/level" },
+        "parent_id": { "type": ["string", "null"] },
+        "district_en": { "type": "string", "maxLength": 80 },
+        "centroid": { "$ref": "#/$defs/centroid" },
+        "n_cells": {
+          "description": "Grid cells aggregated into this polygon. 0 means no coverage - a bug.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "p_onset": { "$ref": "#/$defs/leadSet" },
+        "p_false_onset": { "$ref": "#/$defs/leadSet" },
+        "p_dry7": { "$ref": "#/$defs/leadSet" },
+        "p_dry14": { "$ref": "#/$defs/leadSet" },
+        "p_heavy": { "$ref": "#/$defs/leadSet" },
+        "onset_delay_weeks": {
+          "description": "Today minus this area's climatological onset date, in weeks. Negative = early.",
+          "type": "number",
+          "minimum": -8,
+          "maximum": 12
+        },
+        "onset_status": { "$ref": "#/$defs/onsetStatus" },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "advisories": {
+          "description": "At most 3 - the farmer gets one decision, not a list.",
+          "type": "array",
+          "maxItems": 3,
+          "items": { "$ref": "#/$defs/advisory" }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["nwp", "statistical", "blend_weights"],
+      "additionalProperties": false,
+      "properties": {
+        "nwp": {
+          "type": "object",
+          "required": ["source", "members"],
+          "additionalProperties": true,
+          "properties": {
+            "source": { "type": "string" },
+            "members": { "type": "integer", "minimum": 1 },
+            "run_date": { "type": "string", "format": "date" }
+          }
+        },
+        "statistical": {
+          "type": "object",
+          "required": ["source", "seasons"],
+          "additionalProperties": true,
+          "properties": {
+            "source": { "type": "string" },
+            "seasons": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "blend_weights": { "$ref": "#/$defs/leadSet" },
+        "calibration": { "type": "string" }
+      }
+    },
+    "skill": {
+      "description": "Honest verification, carried in the payload so the UI can never hide it.",
+      "type": "object",
+      "required": ["bss", "reference"],
+      "additionalProperties": false,
+      "properties": {
+        "bss": {
+          "description": "Brier Skill Score vs climatology. May be negative - that is the point.",
+          "type": "object",
+          "required": ["w1", "w2", "w3", "w4"],
+          "additionalProperties": false,
+          "properties": {
+            "w1": { "type": "number", "minimum": -1, "maximum": 1 },
+            "w2": { "type": "number", "minimum": -1, "maximum": 1 },
+            "w3": { "type": "number", "minimum": -1, "maximum": 1 },
+            "w4": { "type": "number", "minimum": -1, "maximum": 1 }
+          }
+        },
+        "reference": { "type": "string" },
+        "roc_auc": { "type": "number", "minimum": 0, "maximum": 1 },
+        "advisory_horizon_weeks": {
+          "description": "Beyond this lead we label output 'outlook' and issue no advisory.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "generated_at",
+        "valid_from",
+        "state",
+        "code_system"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+        "model_version": { "type": "string" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "valid_from": { "type": "string", "format": "date" },
+        "state": { "type": "string", "minLength": 2 },
+        "code_system": {
+          "description": "'mock' until P2 replaces placeholders with real LGD codes.",
+          "enum": ["mock", "lgd"]
+        },
+        "is_mock": { "type": "boolean" },
+        "lead_dates": {
+          "type": "object",
+          "required": ["w1", "w2", "w3", "w4"],
+          "additionalProperties": false,
+          "properties": {
+            "w1": { "$ref": "#/$defs/dateRange" },
+            "w2": { "$ref": "#/$defs/dateRange" },
+            "w3": { "$ref": "#/$defs/dateRange" },
+            "w4": { "$ref": "#/$defs/dateRange" }
+          }
+        }
+      }
+    },
+    "dateRange": {
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": { "type": "string", "format": "date" },
+        "end": { "type": "string", "format": "date" }
+      }
+    }
+  }
+}
