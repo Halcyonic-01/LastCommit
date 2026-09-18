@@ -2,6 +2,10 @@
 imdlib==0.1.21
 xarray
 netCDF4
+h5netcdf
+h5py
+fsspec
+aiohttp
 rioxarray
 
 # Geospatial
@@ -16,6 +20,10 @@ numpy
 lightgbm
 scikit-learn
 pyarrow
+
+# Contract
+jsonschema
+referencing
 
 # Rules + pipeline
 PyYAML

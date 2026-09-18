@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://varshadrishti.dev/schema/forecast.schema.json",
+  "title": "VarshaDrishti full forecast (latest.json / archive/YYYY-MM-DD.json)",
+  "description": "Every area in one state. Read by the officer dashboard and the map. The farmer PWA reads area/<id>.json instead - see area.schema.json.",
+  "type": "object",
+  "required": ["meta", "provenance", "skill", "areas"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": { "$ref": "common.schema.json#/$defs/meta" },
+    "provenance": { "$ref": "common.schema.json#/$defs/provenance" },
+    "skill": { "$ref": "common.schema.json#/$defs/skill" },
+    "areas": {
+      "description": "Keyed by area_id for O(1) lookup - never an array, the app must not scan.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "common.schema.json#/$defs/areaId" },
+      "additionalProperties": { "$ref": "common.schema.json#/$defs/forecastBody" }
+    }
+  }
+}

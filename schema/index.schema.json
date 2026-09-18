@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://varshadrishti.dev/schema/index.schema.json",
+  "title": "VarshaDrishti area index (forecast/index.json)",
+  "description": "Tiny lookup for the onboarding pickers: district -> taluk -> hobli. No probabilities.",
+  "type": "object",
+  "required": ["meta", "areas"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": { "$ref": "common.schema.json#/$defs/meta" },
+    "areas": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "$ref": "common.schema.json#/$defs/areaId" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["name_en", "level"],
+        "additionalProperties": false,
+        "properties": {
+          "name_en": { "type": "string", "minLength": 1, "maxLength": 80 },
+          "name_kn": { "type": "string", "maxLength": 80 },
+          "level": { "$ref": "common.schema.json#/$defs/level" },
+          "parent_id": { "type": ["string", "null"] },
+          "district_en": { "type": "string", "maxLength": 80 },
+          "centroid": { "$ref": "common.schema.json#/$defs/centroid" }
+        }
+      }
+    }
+  }
+}

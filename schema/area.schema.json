@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://varshadrishti.dev/schema/area.schema.json",
+  "title": "VarshaDrishti single-area forecast (forecast/area/<id>.json)",
+  "description": "What the farmer PWA fetches - one area only. Budget ~2 KB so it works on 2G.",
+  "type": "object",
+  "required": ["meta", "forecast", "skill"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": { "$ref": "common.schema.json#/$defs/meta" },
+    "forecast": { "$ref": "common.schema.json#/$defs/forecastBody" },
+    "skill": { "$ref": "common.schema.json#/$defs/skill" },
+    "provenance_summary": {
+      "description": "One human sentence for the 'Why?' expander. Full provenance lives in latest.json.",
+      "type": "string",
+      "maxLength": 240
+    }
+  }
+}
