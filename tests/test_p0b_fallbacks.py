@@ -62,12 +62,17 @@ def era5_chunks():
 def test_era5_covers_every_cell_and_period(era5_chunks):
     """Insurance that was never proven at scale is not insurance."""
     assert era5_chunks, "no ERA5 chunks — run scripts/download_era5_insurance.py"
+    # Chunked per SEASON, not per 5-year block: the archive API weights a call by
+    # locations x time range, and whole-year windows kept tripping the hourly cap.
     periods, cells = set(), set()
     for p in era5_chunks:
         d = json.loads(p.read_text())
         periods.add((d["start"], d["end"]))
         cells.update(d["cell_ids"])
-    assert len(periods) == 7, f"expected 7 date chunks, got {len(periods)}"
+    seasons = {pd.Timestamp(a).year for a, _ in periods}
+    assert seasons == set(range(1991, 2025)), f"missing seasons: {set(range(1991,2025)) - seasons}"
+    for a, b in periods:
+        assert pd.Timestamp(a).month == 5 and pd.Timestamp(b).month == 10, (a, b)
 
     w = pd.concat([pd.read_parquet(p) for p in (ROOT / "data" / "processed").glob("weights_imd_*.parquet")])
     expected = set(w["cell_id"].unique())
@@ -90,8 +95,8 @@ def test_era5_can_substitute_for_imd_on_the_same_cell(era5_chunks):
     import imdlib as imd
 
     year = 2023
-    chunk = next((p for p in era5_chunks if p.name.startswith("2021_2024")), None)
-    assert chunk, "no 2021-2024 ERA5 chunk"
+    chunk = next((p for p in era5_chunks if p.name.startswith(f"{year}_")), None)
+    assert chunk, f"no {year} ERA5 chunk"
     d = json.loads(chunk.read_text())
 
     cell_id = d["cell_ids"][0]
