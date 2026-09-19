@@ -170,11 +170,20 @@ img { display: block; max-width: 100%; }
    button across the full 1080px shell. No-op at phone width. */
 .colmax { max-width: 620px; }
 
-/* ---- officer surface: same semantics, inverted ground ------------------ */
-.ops { --paper: #14171a; --paper2: #1b1f23; --paper3: #21262b;
-       --ink: #eef1f3; --ink2: #9aa4ac; --ink3: #6f7981;
-       --rule: #2b3238; --rule2: #3a434b;
-       --water2: #5aa3dc; --wait: #d29a33; --risk: #d9563c; --ok: #4e9c74;
+/* ---- officer surface: light theme scoped to officer panel ---------------- */
+.ops { 
+       --paper:  #f4efe4;
+       --paper2: #fbf8f1;
+       --paper3: #ece5d6;
+       --ink:    #17140f;
+       --ink2:   #5e564a;
+       --ink3:   #8c8270;
+       --rule:   #ddd3c0;
+       --rule2:  #c9bca3;
+       --water2: #3d86be;
+       --wait:   #a8761a;
+       --risk:   #9a2a18;
+       --ok:     #2c6247;
        background: var(--paper); color: var(--ink); min-height: 100%; }
 .ops .num, .ops table { font-variant-numeric: tabular-nums; }
 .ops-mono { font-family: ui-monospace, "SF Mono", "Roboto Mono", Menlo, monospace; }
