@@ -20,35 +20,243 @@ Scored with **Brier Skill Score against climatology**, never bare accuracy.
 
 Runs on GitHub Actions and static JSON. **₹0/month.**
 
-## Setup
+---
+
+# First run
+
+## 0. Prerequisites
+
+| Need | Version | Check |
+|---|---|---|
+| Python | **3.12** | `python3.12 --version` |
+| Node | 20+ | `node -v` |
+| git | any | `git --version` |
+| Free disk | **~2 GB** | raw data 1.0 GB · `.venv` 650 MB · `node_modules` 160 MB |
+
+**Use 3.12.** The source compiles on 3.11–3.14, but 3.12 is what the pinned dependencies
+(`imdlib==0.1.21`, geopandas, lightgbm) are tested against here, and it is what CI will
+use. If `python3` on your machine is something else, say `python3.12` explicitly below.
+
+macOS: `brew install python@3.12 node`. Ubuntu: `sudo apt install python3.12 python3.12-venv nodejs npm`.
+
+## 1. Install
 
 ```bash
+git clone https://github.com/Halcyonic-01/LastCommit.git && cd LastCommit
 python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.example .env    # fill in keys
+cp .env.example .env
 ```
 
-## Get the data (~860 MB, ~23 min)
+Every command below uses `.venv/bin/python` rather than an activated shell, so you can
+copy-paste them into any terminal without worrying about which venv is live.
+
+`.env` can stay empty for now. Nothing in the data pipeline, the model or the web app reads
+it — only the Telegram sender does, and that is step 6.
+
+## 2. What a fresh clone does *not* contain
+
+Bulk data is gitignored on purpose: it is all re-downloadable, and a nightly job that
+committed 1,127 files would make the history unusable. **You get this for free:**
+
+```
+geo/*.geojson                  Karnataka district / taluk / hobli boundaries
+data/processed/weights_*.parquet   cell → area matrices (the expensive P2 output)
+forecast/latest.json           a full mock forecast for all 1,127 areas
+rules/                         the CRIDA advisory rules
+```
+
+**You have to build this:**
+
+```
+data/raw/*                     ~1.0 GB of rainfall, indices, boundaries
+data/processed/features.parquet  the P5 training table
+forecast/area/*.json           1,127 per-area files, regenerated from latest.json
+```
+
+Which means: **the web app runs immediately, the model pipeline needs step 4.**
+
+## 3. Run the web app (2 minutes, no data download)
 
 ```bash
-.venv/bin/python scripts/download_imd.py       # 34 years IMD 0.25deg rainfall
-.venv/bin/python scripts/download_indices.py   # ONI, Nino3.4, DMI, RMM MJO
-.venv/bin/python scripts/download_crida.py     # 7 district contingency plans
-.venv/bin/python scripts/download_chirps.py    # CHIRPS 0.05deg Karnataka, 2015-2025
+cd web && npm install
 ```
 
-`download_chirps.py` pulls the **panchayat-scale** layer: 0.05° (~5.5 km) vs IMD's 0.25°
-(~27.5 km) — 12,880 Karnataka cells instead of ~300. It subsets the CHC server lazily over
-HTTP range requests, so a season costs 2.7 MB and ~45 s rather than a 1 GB yearly global file.
+```bash
+.venv/bin/python scripts/split_forecast.py
+```
 
-`scripts/download_era5_insurance.py` is the ERA5-Land fallback if IMD Pune is down.
+```bash
+cd web && npm run dev
+```
 
-## Test
+Open the printed URL (usually `http://localhost:5173`).
+
+`split_forecast.py` explodes `forecast/latest.json` into the 1,127 per-area files the app
+fetches. **`npm run dev` does not do this for you** — skip it and every screen shows a
+load error. `npm run build` *does* run it automatically, via `scripts/prebuild.mjs`.
+
+Six screens: `/` onboarding · `/today` the advisory · `/why` the explanation ·
+`/rain` the farmer's rain report · `/officer` the map · `/verify` the honesty page.
+
+## 4. Get the data (~1.0 GB, ~25 min)
+
+Run these in order. Each is resumable — rerun after an interruption and it skips what is
+already on disk.
+
+```bash
+.venv/bin/python scripts/download_imd.py       # 825 MB, ~13 min — 34 seasons, the training truth
+.venv/bin/python scripts/download_indices.py   # 2.5 MB, seconds — ONI, Nino3.4, DMI, RMM MJO
+.venv/bin/python scripts/download_boundaries.py  # 66 MB — KGIS Karnataka polygons
+.venv/bin/python scripts/download_osm_names.py   # 28 KB — Kannada place names
+.venv/bin/python scripts/download_crida.py     # 3.4 MB — 7 district contingency plans
+.venv/bin/python scripts/download_chirps.py    # 83 MB, ~10 min — 0.05° panchayat layer
+```
+
+`download_chirps.py` is the **panchayat-scale** layer: 0.05° (~5.5 km) against IMD's 0.25°
+(~27.5 km), so 12,880 Karnataka cells instead of ~300. It range-subsets the CHC server over
+HTTP, so one season costs 2.7 MB and ~45 s rather than a 1 GB global file.
+
+**Optional — the IMD fallback.** `scripts/download_era5_insurance.py` pulls ERA5-Land for
+the same cells, used only if IMD Pune is unreachable. It is bounded by Open-Meteo's hourly
+cap, not by our code, so it takes ~100 min wall-clock and must be run through its wrapper,
+which restarts it after each cap:
+
+```bash
+./scripts/run_era5_until_done.sh
+```
+
+## 5. Build the pipeline
+
+Order matters — each step reads the one before it.
+
+```bash
+.venv/bin/python scripts/build_geo.py          # boundaries → geo/*.geojson + weights_*.parquet
+```
+
+```bash
+.venv/bin/python scripts/build_features.py     # IMD + indices → features.parquet (~1 min)
+```
+
+```bash
+.venv/bin/python scripts/make_mock_forecast.py # → forecast/latest.json + index.json
+```
+
+```bash
+.venv/bin/python scripts/split_forecast.py     # → forecast/area/*.json
+```
+
+`build_features.py` produces **1,339,804 rows × 39 columns, 53 MB** — 323 IMD cells ×
+34 seasons × 122 days, with the onset / false-onset / dry-spell / heavy-rain labels and
+the causal features the model trains on. See *Reading the feature table* below.
+
+## 6. Telegram (optional)
+
+Get a token from [@BotFather](https://t.me/BotFather), put it in `.env` as
+`TELEGRAM_BOT_TOKEN`, then:
+
+```bash
+.venv/bin/python scripts/telegram_setup.py
+```
+
+It prints your chat id — paste that into `.env` as `TELEGRAM_CHAT_ID`. Then
+`services/telegram/send.py` will deliver a real Kannada advisory to your phone.
+
+**Never commit `.env`.** It is gitignored; keep it that way.
+
+## 7. Test
 
 ```bash
 .venv/bin/python -m pytest -q
 ```
 
-## Plan
+| You should see | Meaning |
+|---|---|
+| `159 passed` | everything downloaded and built |
+| `133 passed, 26 skipped` | fresh clone, no data yet — **this is correct**, not a failure |
+| anything `failed` | a real problem; the assertion message says what |
 
-See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) — priority-ordered P0→P11, worked
-strictly top-down.
+Tests skip with the exact command that fixes them, so read the skip reasons rather than
+guessing. The P3 web tests need `npm run build` in `web/` first; the P4 tests need
+`build_features.py`.
+
+---
+
+# Reading the feature table
+
+```python
+import pandas as pd
+df = pd.read_parquet("data/processed/features.parquet")
+```
+
+Two rules govern every column, and `tests/test_p4_features.py` enforces both by poking the
+inputs rather than reading the source:
+
+- **Causal** — a feature may only use rain up to and including that day. The *confirmed*
+  onset date needs 30 days of hindsight, so it is a label and never a feature; the knowable
+  wet-spell **candidate** (`wet_spell_seen`) is what the model gets.
+- **Leave-one-year-out** — climatology for 1993 is built from the other 33 seasons. Fitted
+  on all 34 it leaks the held-out year into its own prediction, and a shuffled-label test
+  would not catch it.
+
+**Split by year, never randomly.** Neighbouring cells in one season are the same weather
+event; a random split leaks and produces a fake 95%. Every row carries `year` for this.
+
+**Do not rebalance the classes.** Base rates are natural on purpose — resampling degrades
+probability calibration, and Brier Skill Score is the metric. Weight or recalibrate instead.
+
+---
+
+# Troubleshooting
+
+**`pytest` fails instead of skipping on a fresh clone.** You are on an old commit; pull.
+Missing data should always skip with the download command in the reason.
+
+**Every web screen shows a load error.** You did not run `split_forecast.py`, so
+`forecast/area/` is empty. See step 3.
+
+**`imdlib` writes somewhere unexpected.** It writes `data/rain/<year>.grd`, lowercase, not
+`data/imd/<year>.GRD`. Our scripts already account for this; custom scripts often do not.
+
+**Rainfall sums look enormous.** IMD flags sea and no-data cells as **−999**. Mask with
+`rain.where(rain >= 0)` — never `rain.where(rain < 1000)`, which keeps the flag and lets it
+accumulate silently into every rolling sum. This one is pinned by a test.
+
+**MJO columns are empty for recent seasons.** BoM moved the RMM feed. The old path still
+returns `200 OK` with a well-formed file frozen at 2024-02-24 — silent staleness, no error.
+Rerun `download_indices.py`; a test fails if RMM ends before the last training season.
+
+**ERA5 stops with HTTP 429.** Expected. Open-Meteo's archive API caps by the hour and
+weights each call by locations × time range. Use `./scripts/run_era5_until_done.sh`, which
+restarts after each cap and skips what is already cached.
+
+**Port 5173 already in use.** `lsof -ti:5173 | xargs kill`.
+
+**Tests pass locally but the web build is stale.** Browsers cache the bundle hard. Add a
+cache-busting query or hard-reload before concluding anything about the CSS.
+
+---
+
+# Layout
+
+```
+scripts/     one job each, all resumable, all runnable standalone
+src/varshadrishti/
+  data/      rainfall loaders — IMD, ERA5, CHIRPS behind one interface
+  features/  labels.py (onset/false-onset/dry-spell) · build.py · indices.py
+  geo/       boundary dissolve + cell→area weight matrices
+  rules/     the CRIDA advisory engine — regex-parsed YAML, never eval
+  model/     P5, not written yet
+rules/       default.yaml + districts/*.yaml — district plans override by rule id
+schema/      the frozen data contract (JSON Schema 2020-12)
+web/         React + Vite PWA
+services/    telegram sender
+tests/       one file per phase, P0 → P4
+```
+
+## Conventions
+
+- **Short comments, one line**, placed at the point of confusion — not docstring essays.
+- **Test after each phase**, on a branch named `phase/pN-<slug>`.
+- **Nothing bulk gets committed.** Single `.gitignore` at the root; no per-directory ones.
+- The data contract in `schema/` is frozen. It has caught four real bugs before they
+  shipped; if your change fights it, the change is usually wrong.

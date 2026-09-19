@@ -18,6 +18,16 @@ CHIRPS = RAW / "chirps"
 IMD_YEARS = range(1991, 2025)
 ERA5_CHUNKS_EXPECTED = 238  # 324 cells / batch 50, x 34 season windows
 
+needs_chirps = pytest.mark.skipif(
+    len(list(CHIRPS.glob("*.nc"))) < 30,
+    reason="no CHIRPS seasons — run `.venv/bin/python scripts/download_chirps.py`",
+)
+
+needs_imd = pytest.mark.skipif(
+    not list((RAW / "rain").glob("*.grd")),
+    reason="no IMD data — run `.venv/bin/python scripts/download_imd.py`",
+)
+
 needs_era5 = pytest.mark.skipif(
     len(list(ERA5.glob("*.json"))) < ERA5_CHUNKS_EXPECTED,
     reason=(
@@ -31,6 +41,7 @@ needs_era5 = pytest.mark.skipif(
 # --- CHIRPS depth ---------------------------------------------------------
 
 
+@needs_chirps
 def test_chirps_matches_imd_season_coverage():
     """CHIRPS is the panchayat-scale verification layer; it must span the IMD training years."""
     years = {int(p.stem.rsplit("_", 1)[1]) for p in CHIRPS.glob("chirps_karnataka_*.nc")}
@@ -38,6 +49,7 @@ def test_chirps_matches_imd_season_coverage():
     assert not missing, f"{len(missing)} seasons missing: {sorted(missing)[:8]}"
 
 
+@needs_chirps
 def test_chirps_seasons_all_have_the_same_shape():
     import xarray as xr
 
@@ -90,6 +102,7 @@ def test_era5_values_are_plausible_rainfall(era5_chunks):
 
 
 @needs_era5
+@needs_imd
 def test_era5_can_substitute_for_imd_on_the_same_cell(era5_chunks):
     """The point of the fallback: same cell, same season, comparable seasonal total."""
     import imdlib as imd
@@ -152,6 +165,7 @@ def test_nwp_models_cover_the_same_cells():
 # --- one interface over three sources -------------------------------------
 
 
+@needs_chirps
 def test_chirps_loader_returns_wide_daily_frame():
     from varshadrishti.data import rainfall as R
 
@@ -180,6 +194,8 @@ def test_era5_loader_spans_the_imd_training_years():
     assert e.index.max().year >= 2024
 
 
+@needs_chirps
+@needs_imd
 def test_imd_and_chirps_are_complete():
     """IMD and CHIRPS are the two sources the model actually depends on."""
     from varshadrishti.data import rainfall as R
@@ -190,6 +206,8 @@ def test_imd_and_chirps_are_complete():
 
 
 @needs_era5
+@needs_chirps
+@needs_imd
 def test_all_three_sources_present():
     from varshadrishti.data import rainfall as R
 

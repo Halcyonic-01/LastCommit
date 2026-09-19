@@ -12,6 +12,13 @@ RAW = ROOT / "data" / "raw"
 IMD_LAT, IMD_LON = 129, 135  # 6.5-38.5N, 66.5-100.0E at 0.25 deg
 YEARS = range(1991, 2025)
 
+# A fresh clone has no data/raw — it is all gitignored and re-downloadable. Skip with the
+# command to fix it rather than failing 23 times at a new teammate.
+pytestmark = pytest.mark.skipif(
+    not list(RAW.joinpath("rain").glob("*.grd")),
+    reason="no IMD data — run `.venv/bin/python scripts/download_imd.py` (825 MB, ~13 min)",
+)
+
 
 def test_all_34_years_present():
     grds = sorted(RAW.joinpath("rain").glob("*.grd"))
