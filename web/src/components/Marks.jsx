@@ -20,3 +20,5 @@ export const Pin = (p) => <M d={<><path d="M12 21.5s7-6 7-11.5a7 7 0 1 0-14 0c0 
 export const Back = (p) => <M d="M15 19l-7-7 7-7" {...p} />;
 export const Fwd  = (p) => <M d="M9 5l7 7-7 7" {...p} />;
 export const Tick = (p) => <M d="M20 6.5L9.5 17 4 11.5" sw={2.6} {...p} />;
+export const Pause = (p) => <M d="M9 16V8M15 16V8" sw={2.5} {...p} />;
+export const Play = (p) => <M d="M8 6v12l9-6z" {...p} />;

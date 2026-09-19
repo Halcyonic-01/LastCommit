@@ -17,3 +17,21 @@ export function speak(text, lang = "kn") {
 }
 
 export const canSpeak = () => typeof window !== "undefined" && "speechSynthesis" in window;
+
+export function stopSpeech() {
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+export function pauseSpeech() {
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.pause();
+  }
+}
+
+export function resumeSpeech() {
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.resume();
+  }
+}
