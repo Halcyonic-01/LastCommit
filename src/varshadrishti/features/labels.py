@@ -153,6 +153,13 @@ def daily_event_labels(rain: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 
 def within_horizon(flag: pd.DataFrame, days: int) -> pd.DataFrame:
-    """Does the event occur ANY time in the next `days`? This is what the app promises."""
+    """Does the event occur on any of the next `days` days - STRICTLY after today?
+
+    Excluding today is not a detail. Include it and `y_onset_7` is 1 whenever the feature
+    `wet_spell_today` is 1: P(target | feature) = 1.000, measured. The model then scores
+    BSS +0.43 by reading the answer off its own input, and the forecast reduces to telling
+    a farmer standing in the rain that it is raining.
+    """
     fwd = flag[::-1].rolling(days, min_periods=1).sum()[::-1]
-    return (fwd > 0).astype(float).where(flag.notna())
+    ahead = fwd.shift(-1)  # drop today; the horizon is t+1 .. t+days
+    return (ahead > 0).astype(float).where(ahead.notna())

@@ -206,6 +206,38 @@ probability calibration, and Brier Skill Score is the metric. Weight or recalibr
 
 ---
 
+# Using the trained model
+
+The trained models are committed (`models/`, 3.5 MB), so **a teammate does not have to
+train anything**. Clone, install, and they work. Training takes 45 minutes; loading takes
+a second.
+
+```bash
+.venv/bin/python scripts/predict.py --date 2024-07-15 --limit 5
+```
+
+That prints a calibrated probability per area for all 11 targets. In your own code:
+
+```python
+from varshadrishti.model import predict as P
+P.available()            # the 11 targets
+P.predict(df, "y_dry7_7")  # one target, a probability per row
+P.predict_all(df)          # all of them
+```
+
+`df` needs the feature columns, which come from `data/processed/features.parquet` — that
+file is NOT committed (63 MB), so build it once with `scripts/build_features.py`.
+
+Inference needs only **lightgbm and numpy**: the calibration ships as two arrays replayed
+with `np.interp`, not a pickled scikit-learn object, so nothing breaks when versions move.
+
+**What the numbers mean.** Each is a probability between 0 and 1 for one area on one day —
+`y_dry7_7` is "a 7-day dry spell begins within the next 7 days". They are calibrated, so
+when the model says 0.45 the event happens about 45% of the time. Measured skill per target
+is in `models/metrics.json`; retrain with `scripts/train_model.py`.
+
+---
+
 # Troubleshooting
 
 **`pytest` fails instead of skipping on a fresh clone.** You are on an old commit; pull.

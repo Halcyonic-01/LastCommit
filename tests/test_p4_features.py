@@ -297,3 +297,37 @@ def test_every_row_carries_the_year_so_p5_can_split_on_it(built):
     """Random splits leak: neighbouring cells in one season are the same weather event."""
     assert "year" in built.columns
     assert built["year"].nunique() == len(SEASONS)
+
+
+@needs_build
+def test_no_feature_hands_a_target_its_own_answer(built):
+    """The bug this catches, found the hard way: `y_onset_7` once included day t, and
+    `wet_spell_today` is a feature, so P(target | feature) was exactly 1.000. The model
+    scored BSS +0.43 by reading the answer off its input. Any feature that determines a
+    target outright is either a definitional overlap or leakage — both are fatal."""
+    targets = [c for c in built.columns if c.startswith("y_")]
+    feats = [c for c in built.columns
+             if c not in targets and c not in ("date", "cell_id", "year", "sday")]
+    offenders = []
+    for f in feats:
+        col = built[f]
+        # only features that act like a flag can be tautological on their own
+        vals = col.dropna().unique()
+        if len(vals) != 2:
+            continue
+        on = col == max(vals)
+        if on.sum() < 1000:
+            continue
+        for t in targets:
+            rate = built.loc[on, t].mean()
+            if rate > 0.999 or rate < 0.001:
+                offenders.append(f"{f}=1 -> P({t})={rate:.4f}")
+    assert not offenders, "a feature determines a target outright:\n" + "\n".join(offenders)
+
+
+@needs_build
+def test_every_target_asks_about_the_future_not_today(built):
+    """"In the next 7 days" must mean t+1..t+7. Including today makes the forecast a
+    statement about weather the farmer can already see out of the window."""
+    src = (ROOT / "src" / "varshadrishti" / "features" / "labels.py").read_text()
+    assert "shift(-1)" in src, "within_horizon must drop the current day from the horizon"
