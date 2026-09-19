@@ -1,0 +1,206 @@
+/* ============================================================================
+   VarshaDrishti — "Almanac"
+   Ink on unbleached paper. Hairline rules, no shadows, no filled colour cards.
+   Colour is semantic: blue = water, amber = wait, red = risk, green = normal.
+   ========================================================================= */
+:root {
+  color-scheme: light;
+
+  --paper:  #f4efe4;   /* unbleached ground */
+  --paper2: #fbf8f1;   /* raised surface */
+  --paper3: #ece5d6;   /* sunken / inset */
+  --ink:    #17140f;
+  --ink2:   #5e564a;
+  --ink3:   #8c8270;
+  --rule:   #ddd3c0;
+  --rule2:  #c9bca3;
+
+  --water:  #12527f;   /* rain, water — never danger */
+  --water2: #3d86be;
+  --wait:   #a8761a;   /* caution, dry, hold off */
+  --risk:   #9a2a18;   /* higher risk */
+  --ok:     #2c6247;   /* normal — same meaning as IMD green */
+
+  --ink-on-photo: #fffdf7;
+
+  --kn: "Noto Sans Kannada", system-ui, sans-serif;
+  --ui: system-ui, "Roboto", "Segoe UI", Arial, sans-serif;
+  --ed: Georgia, "Noto Serif", "Times New Roman", serif;
+
+  --gut: 20px;
+  --tap: 56px;         /* every farmer-facing control clears this */
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font-family: var(--ui); font-size: 16px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+}
+button, a, select, input { font-family: inherit; color: inherit; }
+button { cursor: pointer; border: none; background: none; padding: 0; }
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
+:focus-visible { outline: 3px solid var(--water); outline-offset: 3px; border-radius: 2px; }
+
+/* ---- type ------------------------------------------------------------- */
+.kn { font-family: var(--kn); font-weight: 600; }
+.ed { font-family: var(--ed); }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* Kannada leads, English glosses underneath at half the presence.
+   The size ratio is the hierarchy — it says which language is the source. */
+.gloss { font-family: var(--ed); font-size: 12.5px; line-height: 1.35; color: var(--ink3); font-style: italic; }
+.gloss-on-photo { color: #e7dcc6; }
+
+.verdict   { font-family: var(--kn); font-weight: 800; font-size: clamp(34px, 10.5vw, 46px); line-height: 1.02; letter-spacing: -0.01em; }
+.h1        { font-family: var(--kn); font-weight: 700; font-size: 26px;   line-height: 1.18; }
+.h2        { font-family: var(--kn); font-weight: 700; font-size: 20px;   line-height: 1.25; }
+.body-kn   { font-family: var(--kn); font-weight: 500; font-size: 17px;   line-height: 1.55; }
+.cap       { font-size: 12px; color: var(--ink2); }
+
+/* Small caps rubric — the printed-form label above a block */
+.rubric {
+  font-family: var(--ui); font-size: 10.5px; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--ink3);
+}
+
+/* ---- shell ------------------------------------------------------------ */
+.shell { max-width: 440px; margin: 0 auto; min-height: 100%; background: var(--paper);
+         display: flex; flex-direction: column; position: relative; }
+.grow { flex: 1 1 auto; min-height: 0; }
+.pad  { padding-left: var(--gut); padding-right: var(--gut); }
+.stack > * + * { margin-top: 18px; }
+
+/* hairline rules do the work that borders and shadows do elsewhere */
+.rule-t { border-top: 1px solid var(--rule); }
+.rule-b { border-bottom: 1px solid var(--rule); }
+.hr { height: 1px; background: var(--rule); border: 0; margin: 0; }
+.hr-heavy { height: 2px; background: var(--ink); border: 0; margin: 0; }
+
+/* ---- the notice: a left colour rule, never a filled card --------------- */
+.notice { border-left: 4px solid var(--rule2); padding-left: 14px; }
+.notice.-water { border-left-color: var(--water); }
+.notice.-wait  { border-left-color: var(--wait); }
+.notice.-risk  { border-left-color: var(--risk); }
+.notice.-ok    { border-left-color: var(--ok); }
+
+/* ---- photo band ------------------------------------------------------- */
+.band { position: relative; overflow: hidden; background: var(--paper3); }
+/* Hero heights live here, not in an inline style — an inline height makes
+   aspect-ratio derive the WIDTH at the breakpoint and the photo spills out. */
+.band.-hero { height: 34vh; }
+.band.-hero.-tall { height: 40vh; }
+.band img { width: 100%; height: 100%; object-fit: cover; }
+.band .scrim {
+  position: absolute; inset: 0;
+  background: linear-gradient(to bottom, rgba(12,10,7,0) 34%, rgba(12,10,7,.34) 62%, rgba(12,10,7,.82) 100%);
+}
+.band .on-photo { position: absolute; left: var(--gut); right: var(--gut); bottom: 16px; color: var(--ink-on-photo); }
+.band .credit {
+  position: absolute; right: 7px; bottom: 5px; font-size: 8px; letter-spacing: .05em;
+  color: rgba(255,253,247,.5); text-shadow: 0 1px 2px rgba(0,0,0,.55);
+}
+/* blur-up: the LQIP paints instantly on 2G, the real file fades over it */
+.band .lqip { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(12px); transform: scale(1.06); }
+.band img.real { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .28s ease; }
+.band img.real.in { opacity: 1; }
+
+/* ---- controls --------------------------------------------------------- */
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: var(--tap); width: 100%; padding: 0 20px;
+  font-family: var(--kn); font-size: 21px; font-weight: 700;
+  background: var(--ink); color: var(--paper2); border-radius: 2px;
+}
+.btn.-water { background: var(--water); }
+.btn.-quiet { background: transparent; color: var(--ink); border: 1.5px solid var(--ink); }
+
+.speak {
+  display: inline-flex; align-items: center; gap: 9px;
+  min-height: 48px; padding: 0 18px 0 14px; border: 1.5px solid var(--ink);
+  border-radius: 24px; font-family: var(--kn); font-size: 16px; font-weight: 700; background: transparent;
+}
+.speak.-onphoto { border-color: rgba(255,253,247,.55); color: var(--ink-on-photo); background: rgba(12,10,7,.28); }
+.speak-ico { width: 48px; height: 48px; border-radius: 24px; border: 1.5px solid var(--rule2);
+             display: flex; align-items: center; justify-content: center; background: var(--paper2); flex: 0 0 auto; }
+.speak-ico.-onphoto { border-color: rgba(255,253,247,.5); background: rgba(12,10,7,.3); }
+
+/* ---- decade strip: 10 blocks, N filled. Frequency, not percentage ------ */
+.decade { display: flex; gap: 3px; }
+.decade i { flex: 1; height: 100%; background: var(--rule); border-radius: 1px; }
+.decade i.on { background: var(--wait); }
+.decade.-risk i.on  { background: var(--risk); }
+.decade.-water i.on { background: var(--water); }
+.decade.-sm  { height: 16px; }
+.decade.-md  { height: 34px; }
+.decade.-lg  { height: 62px; gap: 5px; }
+
+/* ---- four-week ribbon: confidence is rendered, not labelled ------------ */
+.ribbon { display: grid; grid-template-columns: repeat(4, 1fr); }
+.ribbon .wk { padding: 0 8px 0 0; }
+.ribbon .wk + .wk { border-left: 1px solid var(--rule); padding-left: 8px; }
+.ribbon .bar { height: 46px; display: flex; align-items: flex-end; }
+.ribbon .bar span { width: 100%; background: var(--wait); border-radius: 1px 1px 0 0; display: block; }
+.ribbon .wk.-outlook .bar span { background: repeating-linear-gradient(-45deg, var(--wait) 0 3px, transparent 3px 6px); }
+.ribbon .base { height: 2px; background: var(--ink); }
+.ribbon .wk.-outlook .base { height: 0; border-top: 2px dashed var(--ink3); background: none; }
+
+/* ---- tabs: three destinations, Kannada word always beside the mark ----- */
+.tabs { display: flex; position: sticky; bottom: 0; background: var(--paper2);
+        border-top: 1px solid var(--rule2); padding-bottom: env(safe-area-inset-bottom); z-index: 5; }
+.tabs a { flex: 1; min-height: 64px; display: flex; flex-direction: column; align-items: center;
+          justify-content: center; gap: 3px; color: var(--ink3); position: relative; }
+.tabs a.on { color: var(--ink); }
+.tabs a.on::before { content: ""; position: absolute; top: -1px; left: 18%; right: 18%; height: 3px; background: var(--ink); }
+.tabs .lbl { font-family: var(--kn); font-size: 12.5px; font-weight: 700; }
+
+/* A screen that must be answerable in one look, with one hand, without scrolling. */
+.oneview { height: 100dvh; max-height: 100dvh; overflow: hidden; }
+.oneview .grow { min-height: 0; }
+.oneview .plate { flex: 1 1 0; min-height: 0; }
+/* plates carry a word at display size, so they need more scrim than a hero band */
+.plate .scrim { background: linear-gradient(to bottom, rgba(12,10,7,.12) 20%, rgba(12,10,7,.45) 58%, rgba(12,10,7,.88) 100%); }
+
+.offline { background: var(--wait); color: #fff; font-size: 12.5px; font-weight: 600;
+           padding: 7px var(--gut); text-align: center; }
+
+/* A confirmation is one short column of text — without this it stretches its
+   button across the full 1080px shell. No-op at phone width. */
+.colmax { max-width: 620px; }
+
+/* ---- officer surface: same semantics, inverted ground ------------------ */
+.ops { --paper: #14171a; --paper2: #1b1f23; --paper3: #21262b;
+       --ink: #eef1f3; --ink2: #9aa4ac; --ink3: #6f7981;
+       --rule: #2b3238; --rule2: #3a434b;
+       --water2: #5aa3dc; --wait: #d29a33; --risk: #d9563c; --ok: #4e9c74;
+       background: var(--paper); color: var(--ink); min-height: 100%; }
+.ops .num, .ops table { font-variant-numeric: tabular-nums; }
+.ops-mono { font-family: ui-monospace, "SF Mono", "Roboto Mono", Menlo, monospace; }
+
+/* ============================================================
+   WIDE — the same content re-sets as an editorial spread rather
+   than a 440px sliver. Layout lives here, never in inline styles.
+   ============================================================ */
+@media (min-width: 900px) {
+  .shell { max-width: 1080px; }
+
+  /* The scroll area still fills the window; the CONTENT grows into it rather
+     than the tab bar riding up. Both columns stretch to the same height and the
+     hero photograph absorbs the slack — on a tall window it simply gets taller. */
+  .grow { display: flex; flex-direction: column; }
+  .spread { display: grid; grid-template-columns: minmax(0,1.15fr) minmax(0,1fr);
+            gap: 34px; align-items: stretch; flex: 1 1 auto; }
+  .spread > * { min-width: 0; display: flex; flex-direction: column; }
+  .tabs { position: static; border: 1px solid var(--rule2); margin: 22px var(--gut) 24px; }
+  .tabs a { min-height: 58px; flex-direction: row; gap: 10px; }
+  /* 16/7 is the floor, not the target: the hero takes the column's spare
+     height so a tall window gets a bigger photograph, not a bigger gap. */
+  .band.-hero, .band.-hero.-tall {
+    height: auto; flex: 1 1 auto;
+    min-height: 30vh;
+    max-height: 680px;   /* past this a landscape photo is cropped into a slab */
+  }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

@@ -7,6 +7,7 @@ probabilities. P6 swaps the numbers for model output; nothing about the shape ch
 """
 
 import argparse
+import hashlib
 import sys
 import warnings
 from datetime import date
@@ -16,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 warnings.filterwarnings("ignore")
 
 from varshadrishti import contract as c  # noqa: E402
+from varshadrishti.rules import engine as E  # noqa: E402
 
 PILOT_DISTRICTS = {"TUMAKURU", "CHITRADURGA", "CHIKKABALLAPURA",
                    "DAVANAGERE", "KOLARA"}
@@ -43,16 +45,19 @@ FIXTURE = [
 ]
 
 
-def pseudo(i):
-    """Deterministic pseudo-values — no RNG, so output is byte-stable across runs."""
-    j = (i % 10) / 10.0
+def pseudo(key):
+    """Deterministic pseudo-values keyed on the area id — byte-stable across runs, but
+    varied like a real state rather than repeating every N areas. Spread 0.12-0.62, so
+    areas land in different advisory bands as the dry belt and the coast really do."""
+    h = int(hashlib.sha1(str(key).encode()).hexdigest()[:8], 16)
+    j = (h % 1000) / 1000.0
     return dict(
         # September: monsoon withdrawing, so onset probability is low and dry-spell risk rises.
         p_onset=c.leadset(0.05 + j * 0.02, 0.04 + j * 0.02, 0.03, 0.02),
         p_false_onset=c.leadset(0.10 + j * 0.03, 0.08 + j * 0.02, 0.06, 0.05),
-        p_dry7=c.leadset(0.32 + j * 0.05, 0.41 + j * 0.04, 0.48, 0.55),
+        p_dry7=c.leadset(0.12 + j * 0.50, min(1.0, 0.20 + j * 0.52), min(1.0, 0.28 + j * 0.50), min(1.0, 0.34 + j * 0.48)),
         p_dry14=c.leadset(0.12 + j * 0.03, 0.19 + j * 0.03, 0.26, 0.31),
-        p_heavy=c.leadset(max(0.0, 0.18 - j * 0.01), 0.12, 0.09, 0.07),
+        p_heavy=c.leadset(max(0.0, 0.40 - j * 0.46), 0.12, 0.09, 0.07),
     )
 
 
@@ -106,24 +111,30 @@ def areas_from_geo(pilot_only: bool):
                     onset_delay_weeks=2.0 + (k % 10) / 10.0,
                     onset_status="in_season",
                     confidence="medium" if k % 3 else "low",
-                    advisories=[ADVISORY] if str(row["name_en"]).upper() == "TUMAKURU" else [],
-                    **pseudo(k + i),
+                    **pseudo(aid),
                 )
             )
+    # rules run over the finished probabilities, exactly as the nightly job will
+    packs = E.load_rules()
+    for a in out:
+        a.advisories = E.evaluate(a.to_dict(), crop="ragi", stage="pre_sowing", packs=packs)
     return out
 
 
 def areas_from_fixture():
-    return [
+    areas = [
         c.Area(
             area_id=aid, name_en=en, name_kn=kn, level=lvl, parent_id=parent,
             centroid=ctr, n_cells=nc, onset_delay_weeks=2.0 + i / 10,
             onset_status="in_season", confidence="medium" if i < 2 else "low",
-            advisories=[ADVISORY] if en == "Tumakuru" else [],
-            **pseudo(i),
+            **pseudo(aid),
         )
         for i, (aid, en, kn, lvl, parent, ctr, nc) in enumerate(FIXTURE)
     ]
+    packs = E.load_rules()
+    for a in areas:
+        a.advisories = E.evaluate(a.to_dict(), crop="ragi", stage="pre_sowing", packs=packs)
+    return areas
 
 
 def main():
