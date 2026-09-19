@@ -1,0 +1,52 @@
+# Statewide fallback rules. A district file overrides any rule with the same id.
+# Every rule cites a real CRIDA table — no citation, no advisory.
+source_doc: ICAR-CRIDA district agriculture contingency plan
+rules:
+  - id: dryspell.presowing.delay
+    crop: any
+    stage: pre_sowing
+    severity: warn
+    table: "2.1"
+    when:
+      p_dry7_w1: [">= 0.30", "< 0.45"]
+    action_kn: ಬಿತ್ತನೆ ಒಂದು ವಾರ ಮುಂದೂಡಿ
+    action_en: Delay sowing by one week
+    reason_kn: ಮಣ್ಣಿನಲ್ಲಿ ತೇವ ಕಡಿಮೆ ಆಗುತ್ತಿದೆ
+    reason_en: Soil moisture is falling
+
+  - id: dryspell.presowing.switch_crop
+    crop: any
+    stage: pre_sowing
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry7_w1: ">= 0.45"
+    action_kn: ಶೇಂಗಾ ಬದಲು ಹುರುಳಿ ಅಥವಾ ನವಣೆ ಬಿತ್ತನೆ ಮಾಡಿ
+    action_en: Switch from groundnut to horse gram or foxtail millet
+    reason_kn: ದೀರ್ಘ ಒಣ ಅವಧಿಯ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು
+    reason_en: A long dry spell is likely
+
+  - id: heavyrain.drainage
+    crop: any
+    stage: any
+    severity: watch
+    table: "2.4"
+    when:
+      p_heavy_w1: ">= 0.30"
+    action_kn: ಹೊಲದಲ್ಲಿ ನೀರು ಹೋಗಲು ಕಾಲುವೆ ಮಾಡಿ
+    action_en: Open drainage channels in the field
+    reason_kn: ಭಾರೀ ಮಳೆಯ ಸಾಧ್ಯತೆ
+    reason_en: Heavy rain is likely
+
+  - id: normal.continue
+    crop: any
+    stage: any
+    severity: info
+    table: "1.1"
+    when:
+      p_dry7_w1: "< 0.30"
+      p_heavy_w1: "< 0.30"
+    action_kn: ಸಾಮಾನ್ಯ ಸ್ಥಿತಿ — ಎಂದಿನಂತೆ ಮುಂದುವರಿಸಿ
+    action_en: Normal conditions — carry on as usual
+    reason_kn: ಅಪಾಯದ ಸೂಚನೆ ಇಲ್ಲ
+    reason_en: No warning signs

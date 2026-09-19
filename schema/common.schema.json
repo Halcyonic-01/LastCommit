@@ -170,6 +170,15 @@
               "maxLength": 60
             }
           }
+        },
+        "reason_en": {
+          "description": "Why this action, in one short clause.",
+          "type": "string",
+          "maxLength": 200
+        },
+        "reason_kn": {
+          "type": "string",
+          "maxLength": 200
         }
       }
     },
@@ -393,7 +402,8 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "semver; minor bump = additive optional fields"
         },
         "model_version": {
           "type": "string"

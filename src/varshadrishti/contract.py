@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"  # 1.1: advisory.reason_en/_kn
 LEADS = ("w1", "w2", "w3", "w4")
 
 ROOT = Path(__file__).resolve().parents[2]

@@ -1,0 +1,16 @@
+# Tumakuru — rainfed ragi and groundnut. Overrides the statewide crop-switch rule
+# with the variety guidance from this district's own contingency plan.
+district: Tumakuru
+source_doc: ICAR-CRIDA Tumakuru district agriculture contingency plan
+rules:
+  - id: dryspell.presowing.switch_crop
+    crop: any
+    stage: pre_sowing
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry7_w1: ">= 0.40"
+    action_kn: ಶೇಂಗಾ ಬದಲು ಹುರುಳಿ ಅಥವಾ ನವಣೆ ಬಿತ್ತನೆ ಮಾಡಿ
+    action_en: Switch from groundnut to horse gram or foxtail millet
+    reason_kn: ತುಮಕೂರಿನಲ್ಲಿ ಈ ಸ್ಥಿತಿಯಲ್ಲಿ ಶೇಂಗಾ ವಿಫಲವಾಗುತ್ತದೆ
+    reason_en: Groundnut fails under these conditions in Tumakuru
