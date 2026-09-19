@@ -11,7 +11,9 @@ SOURCES = {
     "oni.txt": "https://psl.noaa.gov/data/correlation/oni.data",
     "nino34.txt": "https://psl.noaa.gov/data/correlation/nina34.data",
     "dmi.txt": "https://psl.noaa.gov/gcos_wgsp/Timeseries/Data/dmi.had.long.data",
-    "rmm_mjo.txt": "http://www.bom.gov.au/climate/mjo/graphics/rmm.74toRealtime.txt",
+    # BoM moved this. The OLD path (/climate/mjo/graphics/) still serves 200 OK with a
+    # well-formed file frozen at 2024-02-24 — silent staleness, no error to catch.
+    "rmm_mjo.txt": "https://www.bom.gov.au/clim_data/IDCKGEM000/rmm.74toRealtime.txt",
 }
 
 UA = {"User-Agent": "VarshaDrishti/0.1 (SIH 2026 PS 26086; research)"}
