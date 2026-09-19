@@ -7,6 +7,7 @@ probabilities. P6 swaps the numbers for model output; nothing about the shape ch
 """
 
 import argparse
+import json
 import hashlib
 import sys
 import warnings
@@ -43,6 +44,40 @@ FIXTURE = [
     ("MOCK-BLK-Tiptur", "Tiptur", "ತಿಪಟೂರು", "block", None, [76.477, 13.256], 9),
     ("MOCK-HOB-Gubbi", "Gubbi", "ಗುಬ್ಬಿ", "panchayat", "MOCK-BLK-Tumakuru", [76.940, 13.312], 3),
 ]
+
+
+def real_skill():
+    """Measured leave-one-year-out skill from P5, if it has been run.
+
+    The probabilities here stay invented, but the honesty numbers must not be: the
+    advisory horizon is read off where BSS actually stops being positive rather than
+    asserted as 2 weeks.
+    """
+    f = Path(__file__).resolve().parent.parent / "models" / "metrics.json"
+    if not f.exists():
+        return None
+    m = json.loads(f.read_text())
+    # One quantity across the four leads. Mixing dry-spell skill at w1/w2 with onset skill
+    # at w3/w4 would publish a "skill by lead week" series that is not of anything.
+    lead = {"w1": "y_dry7_7", "w2": "y_dry7_14", "w3": "y_dry7_21", "w4": "y_dry7_28"}
+    if not all(k in m for k in lead.values()):
+        return None
+    bss = {w: round(float(m[t]["bss"]), 4) for w, t in lead.items()}
+    # The horizon is where skill is DEMONSTRABLE, not where the point estimate is
+    # positive. y_dry7_28 scores +0.0155 with a 95% interval of (-0.010, 0.038): that
+    # is not skill, it is a number. Advise only while the interval clears zero.
+    horizon = 0
+    for w in ("w1", "w2", "w3", "w4"):
+        lo = float(m[lead[w]].get("bss_ci95", [bss[w], bss[w]])[0])
+        if lo <= 0:
+            break
+        horizon += 1
+    return {
+        "bss": bss,
+        "reference": "per-cell, per-date climatology 1991-2024, leave-one-year-out",
+        "roc_auc": round(float(m["y_dry7_7"]["roc_auc"]), 4),
+        "advisory_horizon_weeks": max(1, horizon),
+    }
 
 
 def pseudo(key):
@@ -159,8 +194,8 @@ def main():
         "blend_weights": c.leadset(0.80, 0.60, 0.40, 0.25),
         "calibration": "isotonic, fitted on leave-one-year-out predictions",
     }
-    # Mock skill, shaped like the real thing: decays with lead and can go negative.
-    skill = {
+    skill = real_skill() or {
+        # only until P5 has run — /verify shows a MOCK badge while this branch is taken
         "bss": {"w1": 0.21, "w2": 0.12, "w3": 0.03, "w4": -0.01},
         "reference": "per-cell, per-date climatology 1991-2024",
         "roc_auc": 0.74,

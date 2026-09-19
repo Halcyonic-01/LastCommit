@@ -26,7 +26,9 @@ forecast/area/
 # Tracked: daily EC46 responses, so a demo survives an Open-Meteo outage
 !data/cache/
 
-# Trained model binaries (metrics JSON is tracked)
+# Trained models: P6's nightly job does INFERENCE, so the boosters and calibration maps
+# have to ship (3.5 MB, changes only on a retrain). metrics.json is tracked too — it is
+# the skill claim. Only the heavyweight pickled formats stay out.
 models/*.pkl
 models/*.joblib
 models/*.lgb

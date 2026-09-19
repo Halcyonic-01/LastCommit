@@ -20,6 +20,7 @@ from .indices import load_indices
 
 BACK_WINDOWS = (1, 3, 7, 14, 30)
 HORIZONS = (7, 14, 21, 28)
+LEAD_CURVE = (1, 3, 7, 10, 14, 21, 28)  # where does skill actually die?
 INDEX_COLS = ["oni", "dmi", "nino34_anom", "rmm1", "rmm2", "mjo_amp", "mjo_phase"]
 
 
@@ -46,6 +47,14 @@ def causal_features(season: pd.DataFrame, thresh: pd.Series) -> dict[str, pd.Dat
     f["wet_spell_seen"] = cand.cummax().astype(float)
     f["days_since_wet_spell"] = _days_since_rain(cand)
     f["spell_deficit"] = five.sub(thresh, axis=1)  # how far short of the local bar
+
+    # Regional state. A monsoon break is synoptic, not per-cell: the whole state goes
+    # quiet together. Measured worth +24% BSS on the 7-day dry spell over local state
+    # alone. Same-day means over cells, so still strictly causal.
+    cols = season.columns
+    for name, src in (("reg_rain_7d", f["rain_7d"]), ("reg_dry", f["days_since_rain"])):
+        f[name] = pd.DataFrame({c: src.mean(axis=1) for c in cols})
+    f["rain_7d_vs_region"] = f["rain_7d"] - f["reg_rain_7d"]
     return f
 
 
@@ -78,8 +87,10 @@ def targets(rain: pd.DataFrame, season_idx: pd.DatetimeIndex, thresh: pd.Series)
     can still see into October rather than being silently truncated to False."""
     ev = L.daily_event_labels(rain)
     out = {}
-    for h in (7, 14):
+    # dry7 at every lead the app shows, plus short leads so the skill curve has a shape
+    for h in LEAD_CURVE:
         out[f"y_dry7_{h}"] = L.within_horizon(ev["dry7_starts"], h).loc[season_idx]
+    for h in (7, 14):
         out[f"y_dry14_{h}"] = L.within_horizon(ev["dry14_starts"], h).loc[season_idx]
     out["y_heavy_7"] = L.within_horizon(ev["heavy"], 7).loc[season_idx]
 
