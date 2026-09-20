@@ -29,9 +29,10 @@ export function savePrefs(patch) {
 // A farmer taps "send" in a field with no bars. The report lands in a local
 // outbox first and leaves later — dropping it because the network was down
 // would lose exactly the ground truth the forecast is being corrected against.
+import { supabase } from "./supabase.js";
+
 const OUTBOX = "vd.outbox.v1";
 const MAX_QUEUED = 200;                                  // ~a season of daily reports
-const ENDPOINT = import.meta.env.VITE_REPORT_ENDPOINT || "";  // unset until P6 stands one up
 
 export function readOutbox() {
   try {
@@ -66,20 +67,26 @@ export function queueReport({ areaId, level }) {
   return { report: r, stored };
 }
 
-/** Send whatever is queued. No endpoint or no network -> everything stays put. */
+// App.jsx, the 'online' event, and a manual submit() can all call flushOutbox() around
+// the same moment; without this guard, two concurrent calls both read the same
+// not-yet-cleared queue and both insert it, duplicating the row in Supabase.
+let flushing = false;
+
+/** Send whatever is queued. Not configured, no network, or already flushing -> no-op. */
 export async function flushOutbox() {
   const q = readOutbox();
-  if (!q.length || !ENDPOINT || !navigator.onLine) return { sent: 0, pending: q.length };
+  if (!q.length || !supabase || !navigator.onLine || flushing) return { sent: 0, pending: q.length };
+  flushing = true;
   try {
-    const res = await fetch(ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reports: q }),
-    });
-    if (!res.ok) throw new Error(String(res.status));
+    // area_id/level/observed_on only — id and created_at are the table's to assign.
+    const rows = q.map((r) => ({ area_id: r.area_id, level: r.level, observed_on: r.observed_on, source: "web" }));
+    const { error } = await supabase.from("rain_reports").insert(rows);
+    if (error) throw error;
     writeOutbox([]);
     return { sent: q.length, pending: 0 };
   } catch {
     return { sent: 0, pending: q.length };  // keep them; the next online event retries
+  } finally {
+    flushing = false;
   }
 }

@@ -149,18 +149,25 @@ def test_targets_do_look_ahead_because_that_is_what_they_are():
 # --- leave-one-year-out climatology ----------------------------------------
 
 
-def test_climatology_for_a_year_never_uses_that_year():
-    """Corrupt 1993 alone. Its own climatology must not move; the others must."""
+def test_the_leave_one_year_out_mode_still_excludes_its_own_year():
+    """Corrupt 1993 alone. Its own climatology must not move; the others must.
+
+    P6 changed the DEFAULT to full-record — nothing reads the stored columns during
+    training (every path overwrites them per fold), so a leave-one-year-out value on disk
+    is only a trap for whoever trains straight off the parquet. The LOYO machinery still
+    has to be correct for anyone who asks for it; fold-level leakage in the paths that
+    matter is covered by tests/test_p5b_leakage.py.
+    """
     years = list(range(1991, 1997))
     rain = synth(years)
     thresh = L.wet_spell_threshold(rain, years)
     onset = pd.concat([L.season_labels(rain, y, thresh) for y in years], ignore_index=True)
-    clim = B.loyo_climatology(rain, years, onset)
+    clim = B.loyo_climatology(rain, years, onset, full_record=False)
 
     bad = rain.copy()
     bad.loc["1993-06-01":"1993-09-30"] = 500.0
     onset2 = pd.concat([L.season_labels(bad, y, thresh) for y in years], ignore_index=True)
-    clim2 = B.loyo_climatology(bad, years, onset2)
+    clim2 = B.loyo_climatology(bad, years, onset2, full_record=False)
 
     pd.testing.assert_frame_equal(
         clim[1993]["clim_rain_doy"], clim2[1993]["clim_rain_doy"],
@@ -331,3 +338,16 @@ def test_every_target_asks_about_the_future_not_today(built):
     statement about weather the farmer can already see out of the window."""
     src = (ROOT / "src" / "varshadrishti" / "features" / "labels.py").read_text()
     assert "shift(-1)" in src, "within_horizon must drop the current day from the horizon"
+
+
+@needs_build
+def test_the_stored_climatology_default_is_full_record():
+    """Deliberate as of P6: what lands in the parquet must equal what inference serves, so
+    a naive train-off-the-parquet gets the serving value rather than a stale LOYO one."""
+    yrs = list(range(1991, 1997))
+    rain = synth(yrs)
+    onset = pd.concat([L.season_labels(rain, y, L.wet_spell_threshold(rain, yrs))
+                       for y in yrs], ignore_index=True)
+    full = B.loyo_climatology(rain, yrs, onset)
+    pd.testing.assert_frame_equal(full[yrs[0]]["clim_rain_doy"], full[yrs[3]]["clim_rain_doy"],
+                                  obj="full-record climatology must not vary by year")

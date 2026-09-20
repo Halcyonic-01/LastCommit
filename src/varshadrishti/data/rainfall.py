@@ -21,6 +21,11 @@ RAW = ROOT / "data" / "raw"
 
 MISSING = -999.0  # IMD's sea/no-data flag; masking with `< 1000` KEEPS it
 
+# Cells the Karnataka weight matrices name but IMD never fills - the 0.25 deg grid treats
+# them as sea. They appear in 4 of 1,127 areas and the aggregator renormalises over the
+# cells that remain, so the only thing they can corrupt is a published `n_cells`.
+IMD_NO_DATA_CELLS = frozenset({"imd:14.75:74.0"})
+
 
 def _cell_id(grid: str, lat: float, lon: float) -> str:
     return f"{grid}:{round(lat, 4)}:{round(lon, 4)}"

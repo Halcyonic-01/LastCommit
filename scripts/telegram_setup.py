@@ -1,8 +1,13 @@
-"""Verify the Telegram bot token, discover chat ids, and send a test advisory.
+"""Verify the Telegram bot token, discover chat ids, and register them as subscribers.
 
 Run after creating the bot with @BotFather and putting the token in .env:
     .venv/bin/python scripts/telegram_setup.py            # verify + list chat ids
     .venv/bin/python scripts/telegram_setup.py --send     # also send a test card
+
+Anyone who has sent /start to the bot shows up in getUpdates. When Supabase is
+configured, each one is registered in `subscribers` (area defaults to --area) so
+services/telegram/send.py picks them up automatically on the next run. Without
+Supabase this just prints a TELEGRAM_CHAT_ID suggestion, as before.
 """
 
 import argparse
@@ -15,6 +20,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 API = "https://api.telegram.org/bot{token}/{method}"
+
+sys.path.insert(0, str(ROOT / "src"))
+from varshadrishti.data import supabase_client as SB  # noqa: E402
 
 
 def load_env():
@@ -41,9 +49,32 @@ def call(token, method, **params):
         return json.loads(r.read())
 
 
+def discover_chats(token: str) -> dict[int, str]:
+    """Chat ids from recent /start messages, keyed to a display name.
+
+    getUpdates only retains recent messages (~24h) — a chat id already trusted enough to
+    sit in .env is still real and messageable even once it ages out of that retention
+    window, so it is folded in here too rather than only trusting a fresh discovery.
+    """
+    updates = call(token, "getUpdates")
+    chats = {}
+    for u in updates.get("result", []):
+        msg = u.get("message") or u.get("channel_post") or {}
+        chat = msg.get("chat")
+        if chat:
+            chats[chat["id"]] = chat.get("first_name") or chat.get("title") or chat.get("username")
+
+    known = os.environ.get("TELEGRAM_CHAT_ID", "").strip()
+    if known and int(known) not in chats:
+        chats[int(known)] = "(from .env TELEGRAM_CHAT_ID)"
+    return chats
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--send", action="store_true", help="send a test advisory card")
+    ap.add_argument("--area", default="KGIS-H-180901", help="area new subscribers are registered for")
+    ap.add_argument("--lang", default="kn", help="language new subscribers are registered with")
     args = ap.parse_args()
 
     token = load_env()
@@ -54,13 +85,7 @@ def main():
     bot = me["result"]
     print(f"bot ok: @{bot['username']}  ({bot['first_name']})")
 
-    updates = call(token, "getUpdates")
-    chats = {}
-    for u in updates.get("result", []):
-        msg = u.get("message") or u.get("channel_post") or {}
-        chat = msg.get("chat")
-        if chat:
-            chats[chat["id"]] = chat.get("first_name") or chat.get("title") or chat.get("username")
+    chats = discover_chats(token)
 
     if not chats:
         print("\nno chats yet — open Telegram, find your bot, and send it /start")
@@ -70,8 +95,16 @@ def main():
     print(f"\n{len(chats)} chat(s) found:")
     for cid, name in chats.items():
         print(f"  {cid}  {name}")
-    print("\nadd to .env:")
-    print(f"  TELEGRAM_CHAT_ID={list(chats)[0]}")
+
+    if SB.client() is not None:
+        print(f"\nregistering as subscribers (area={args.area}, lang={args.lang}):")
+        for cid in chats:
+            ok = SB.add_subscriber(area_id=args.area, channel="telegram",
+                                   destination=str(cid), lang=args.lang)
+            print(f"  {cid}: {'ok' if ok else 'FAILED'}")
+    else:
+        print("\nSupabase not configured — add to .env instead:")
+        print(f"  TELEGRAM_CHAT_ID={list(chats)[0]}")
 
     if args.send:
         text = (

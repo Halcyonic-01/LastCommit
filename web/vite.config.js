@@ -84,5 +84,8 @@ export default defineConfig({
       },
     }),
   ],
+  // VITE_* vars live in the repo-root .env, same "one source of truth" as forecast/geo —
+  // never a second copy in web/.env.
+  envDir: ROOT,
   server: { port: Number(process.env.PORT) || 5173 },
 });

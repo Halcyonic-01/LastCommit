@@ -55,7 +55,9 @@ export default function Verify() {
         <div>
           <div style={{ fontSize: 19, fontWeight: 700 }}>Forecast verification</div>
           <div className="ops-mono" style={{ fontSize: 11, color: "var(--ink2)", marginTop: 3 }}>
-            {skill?.reference?.toUpperCase() ?? "SCORED AGAINST CLIMATOLOGY"} · LEAVE-ONE-YEAR-OUT
+            {/* the reference string states its own protocol — hardcoding one here went
+                stale the moment the backend changed */}
+            {skill?.reference?.toUpperCase() ?? "SCORED AGAINST CLIMATOLOGY"}
           </div>
         </div>
         <Link to="/officer" className="ops-mono" style={{ fontSize: 12, borderBottom: "1px solid var(--rule2)", paddingBottom: 2 }}>← OPERATIONS</Link>
@@ -67,9 +69,11 @@ export default function Verify() {
         {/* skill by lead — including the lead where we are worse than guessing */}
         <section style={{ padding: 20, borderRight: "1px solid var(--rule)" }}>
           <div className="ops-mono" style={{ fontSize: 10, letterSpacing: ".12em", color: "var(--ink3)" }}>BRIER SKILL SCORE BY LEAD</div>
+          {/* Describe what the numbers ARE, never what they were assumed to be: this
+              said "week 4 is negative" long after week 4 turned positive. */}
           <div style={{ fontSize: 13, color: "var(--ink2)", marginTop: 6, maxWidth: 480 }}>
-            Right of the centre line means the forecast beat climatology. Week 4 is shown
-            even though it is negative — that is the point of this screen.
+            Right of the centre line means the forecast beat climatology. Every lead is
+            shown, weak ones included — that is the point of this screen.
           </div>
           <div style={{ marginTop: 18 }}>
             {LEADS.map((k, i) => {
@@ -100,7 +104,8 @@ export default function Verify() {
             })}
           </div>
           <div style={{ marginTop: 18, borderLeft: "3px solid var(--wait)", paddingLeft: 12, fontSize: 13, color: "var(--ink2)", maxWidth: 480 }}>
-            The farmer app refuses to give an action past week {horizon}. It shows those weeks
+            The farmer app refuses to give an action past week {horizon}, the last lead whose
+            95% interval clears zero. It shows the weeks beyond it
             as an outlook with a dashed baseline, and says <span className="kn" style={{ color: "var(--ink)" }}>ಅಂದಾಜು</span> out loud.
           </div>
         </section>
@@ -128,7 +133,8 @@ export default function Verify() {
           <div style={{ marginTop: 26, display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 1, background: "var(--rule)" }}>
             {[
               [skill?.roc_auc?.toFixed(2) ?? "—", "week-1 ROC-AUC for dry spells. Good, not magic."],
-              [skill?.bss ? String(d?.provenance?.statistical?.seasons ?? 34) : "—", "seasons of real evidence behind every number here."],
+              // seasons SCORED, never seasons trained — the evidence is the held-out set
+              [skill?.seasons_scored ? String(skill.seasons_scored) : "—", "independent seasons these numbers were measured on."],
               [d?.provenance?.nwp?.members ?? "—", "ensemble members blended, weighted down as lead grows."],
             ].map(([n, txt]) => (
               <div key={txt} style={{ background: "var(--paper2)", padding: "12px 14px" }}>

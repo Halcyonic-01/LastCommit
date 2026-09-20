@@ -1,0 +1,71 @@
+name: nightly forecast
+
+# 01:30 IST = 20:00 UTC. EC46 and GEFS runs are published well before this.
+on:
+  schedule:
+    - cron: "0 20 * * *"
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: "Run for a specific date (YYYY-MM-DD)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-forecast
+  cancel-in-progress: false
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Inference needs far less than training: no geopandas, no imdlib, no 825 MB archive.
+      - name: Install inference dependencies
+        run: pip install --quiet xgboost numpy pandas pyarrow jsonschema referencing pyyaml
+
+      - name: Fetch climate indices
+        run: python scripts/download_indices.py
+
+      - name: Fetch NWP ensembles
+        run: python scripts/fetch_nwp.py
+        continue-on-error: true   # a stale cached run still produces a forecast
+
+      - name: Run the nightly pipeline
+        run: |
+          DATE="${{ github.event.inputs.as_of }}"
+          python scripts/nightly.py ${DATE:+--as-of "$DATE"}
+
+      - name: Verify the output against the frozen contract
+        run: python -m pytest tests/test_p6_pipeline.py -q
+
+      - name: Commit the forecast
+        run: |
+          git config user.name  "varshadrishti-bot"
+          git config user.email "noreply@github.com"
+          git add forecast/ data/cache/ models/last_run.json
+          if git diff --cached --quiet; then
+            echo "no change — nothing to commit"
+          else
+            git commit -m "forecast: $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-logs
+          path: |
+            models/last_run.json
+            forecast/latest.json
+          retention-days: 7

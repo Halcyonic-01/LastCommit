@@ -198,15 +198,37 @@ def test_forecast_areas_match_the_geojson(districts, blocks, hoblis):
     assert set(latest["areas"]) == geo_ids, "map and forecast disagree on which areas exist"
 
 
-def test_n_cells_comes_from_the_weight_matrix():
+def test_n_cells_counts_only_cells_that_carry_data():
+    """A cell the matrix names but IMD never fills is not coverage.
+
+    `imd:14.75:74.0` is sea. It sits in 4 of 1,127 areas, and counting it overstated
+    KGIS-D-10 at 26 cells when 25 of them carry rainfall. The aggregator already
+    renormalises over the live cells, so the published count has to agree with it.
+    """
+    from varshadrishti.data import rainfall as R
+    from varshadrishti.geo import weights as W
+
     latest = json.loads((ROOT / "forecast" / "latest.json").read_text())
     w = pd.concat([
         pd.read_parquet(PROC / f"weights_imd_{lvl}.parquet")
         for lvl in ("districts", "blocks", "hoblis")
     ])
-    counts = w.groupby("area_id")["cell_id"].count().to_dict()
+    counts = W.coverage(w, R.IMD_NO_DATA_CELLS)["n_cells"].to_dict()
     for aid, body in list(latest["areas"].items())[:200]:
         assert body["n_cells"] == counts[aid], f"{aid}: n_cells is not the real count"
+
+
+def test_no_area_is_left_with_zero_cells_after_excluding_no_data():
+    """Excluding sea cells must not strand an area with nothing to aggregate over."""
+    from varshadrishti.data import rainfall as R
+    from varshadrishti.geo import weights as W
+
+    for lvl in ("districts", "blocks", "hoblis"):
+        cov = W.coverage(pd.read_parquet(PROC / f"weights_imd_{lvl}.parquet"),
+                         R.IMD_NO_DATA_CELLS)
+        empty = cov[cov["n_cells"] == 0]
+        assert empty.empty, f"{lvl}: {list(empty.index)} lost every cell"
+        assert cov["weight_lost"].max() < 0.10, f"{lvl}: an area lost >10% of its weight"
 
 
 def test_farmer_payloads_still_within_budget():

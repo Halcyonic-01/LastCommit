@@ -19,7 +19,12 @@ MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", 
 # running mean centred on it. Using month M inside month M is hindsight, not a forecast.
 MONTHLY_LAG_DAYS = 32
 
-MISSING = (-9999.0, -999.0, 999.0, 1e36)
+MISSING = (-9999.0, -999.0, -99.9, 999.0, 1e36)
+# Sentinels differ per provider and change without notice — NOAA marks an unpublished ONI
+# month -99.9, which is in nobody's documented list and reads as a record La Nina. So also
+# mask by magnitude. The bound must clear ABSOLUTE SST (Nino 3.4 runs ~26-29 degC), not
+# just anomalies: a tight +-10 silently erased that whole series.
+SENTINEL_MAGNITUDE = 99.0
 
 
 def _monthly_table(path: Path) -> pd.Series:
@@ -36,7 +41,7 @@ def _monthly_table(path: Path) -> pd.Series:
         for m, v in enumerate(vals, start=1):
             rows.append((pd.Timestamp(year=year, month=m, day=1), v))
     s = pd.Series(dict(rows)).sort_index()
-    return s.mask(s.isin(MISSING))
+    return s.mask(s.isin(MISSING) | (s.abs() >= SENTINEL_MAGNITUDE))
 
 
 def _daily_from_monthly(s: pd.Series, name: str) -> pd.Series:
@@ -61,7 +66,7 @@ def load_mjo() -> pd.DataFrame:
         rows.append((pd.Timestamp(y, m, d), rmm1, rmm2, phase, amp))
 
     df = pd.DataFrame(rows, columns=["date", "rmm1", "rmm2", "mjo_phase", "mjo_amp"]).set_index("date")
-    df = df.mask(df.isin(MISSING))
+    df = df.mask(df.isin(MISSING) | (df.abs() >= SENTINEL_MAGNITUDE))
     # amplitude < 1 means no coherent MJO — the phase number is then noise, not a signal
     df.loc[df["mjo_amp"] < 1.0, "mjo_phase"] = np.nan
     return df.sort_index()

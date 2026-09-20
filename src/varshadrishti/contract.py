@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
-SCHEMA_VERSION = "1.1.0"  # 1.1: advisory.reason_en/_kn
+SCHEMA_VERSION = "1.4.0"  # 1.1: advisory reasons · 1.2: skill.reliability · 1.3: no_skill_slots · 1.4: provenance.teleconnection
 LEADS = ("w1", "w2", "w3", "w4")
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -187,6 +187,18 @@ def write_json(payload: dict, path: Path, max_bytes: int | None = None) -> int:
         raise ContractError(f"{path.name} is {size} B, over the {max_bytes} B budget")
     path.write_text(blob, encoding="utf-8")
     return size
+
+
+def provenance_summary(payload: dict) -> str:
+    """The one sentence every area file carries, derived from the forecast's own provenance.
+
+    It used to be built independently in the generator and in split_forecast.py, which
+    drifted apart — and since `npm run build` runs split_forecast, a web build silently
+    overwrote live area files with the other version's wording.
+    """
+    p = payload["provenance"]
+    return (f"Based on {p['nwp']['members']} ensemble members and "
+            f"{p['statistical']['seasons']} years of IMD rainfall for your hobli.")
 
 
 def emit_all(

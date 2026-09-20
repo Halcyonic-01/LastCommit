@@ -1,0 +1,39 @@
+{
+ "as_of": "2026-09-19",
+ "generated_at": "2026-09-20T21:37:33.506517+00:00",
+ "seconds": 6.0,
+ "n_cells": 324,
+ "slots_without_a_model": [],
+ "live_feature_coverage": {
+  "worst_case_model": "y_onset_7",
+  "features_populated": 21,
+  "features_expected": 72,
+  "note": "circulation indices end 2024-12-31 and ECMWF reforecast 2023-09-30; absent columns are handled by XGBoost's native missing-value path"
+ },
+ "blend_sources": {
+  "p_dry14_w1": "blend",
+  "p_dry14_w2": "blend",
+  "p_dry14_w3": "blend",
+  "p_dry14_w4": "blend",
+  "p_dry7_w1": "blend",
+  "p_dry7_w2": "blend",
+  "p_dry7_w3": "blend",
+  "p_dry7_w4": "blend",
+  "p_false_onset_w1": "blend",
+  "p_false_onset_w2": "blend",
+  "p_false_onset_w3": "blend",
+  "p_false_onset_w4": "blend",
+  "p_heavy_w1": "blend",
+  "p_heavy_w2": "blend",
+  "p_heavy_w3": "blend",
+  "p_heavy_w4": "blend",
+  "p_onset_w1": "blend",
+  "p_onset_w2": "blend",
+  "p_onset_w3": "blend",
+  "p_onset_w4": "blend"
+ },
+ "nwp_models": [
+  "ec46",
+  "gefs"
+ ]
+}

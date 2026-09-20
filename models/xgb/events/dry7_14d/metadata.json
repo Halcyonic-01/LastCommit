@@ -1,0 +1,52 @@
+{
+  "target": "y_dry7_14",
+  "group": "dry7",
+  "horizon_days": 14,
+  "trained_at_utc": "2026-09-20T20:54:31.432668+00:00",
+  "xgboost_version": "3.4.1",
+  "hyperparameters": {
+    "objective": "binary:logistic",
+    "eval_metric": "logloss",
+    "n_estimators": 1500,
+    "max_depth": 8,
+    "learning_rate": 0.031224629472964872,
+    "subsample": 0.8169875558405426,
+    "colsample_bytree": 0.463538442250452,
+    "min_child_weight": 18.94642822385356,
+    "reg_lambda": 0.26364454579179064,
+    "tree_method": "hist",
+    "n_jobs": -1,
+    "random_state": 42,
+    "early_stopping_rounds": 75,
+    "reg_alpha": 0.1808601796729088,
+    "gamma": 4.831159560715909,
+    "scale_pos_weight": 1.0
+  },
+  "feature_set": "extended",
+  "ecmwf": false,
+  "n_features": 64,
+  "tuned": true,
+  "scale_pos_weight": 1.0,
+  "decision_threshold": 0.41876892933144644,
+  "climatology_reference_rate": 0.5869197584124245,
+  "best_iteration": 99,
+  "split_years": {
+    "train": [
+      1991,
+      2015
+    ],
+    "val": [
+      2016,
+      2019
+    ],
+    "test": [
+      2020,
+      2024
+    ]
+  },
+  "row_counts": {
+    "train": 985150,
+    "val": 157624,
+    "test": 197030
+  }
+}

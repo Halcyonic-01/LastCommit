@@ -12,6 +12,9 @@ ROOT = Path(__file__).resolve().parents[2]
 SUBS = ROOT / "services" / "telegram" / "subscribers.json"
 API = "https://api.telegram.org/bot{token}/{method}"
 
+sys.path.insert(0, str(ROOT / "src"))
+from varshadrishti.data import supabase_client as SB  # noqa: E402
+
 
 def load_env():
     env = ROOT / ".env"
@@ -61,6 +64,24 @@ def compose(area_file: Path) -> str:
     return "\n".join(lines)
 
 
+def resolve_chats(override: str | None) -> list[str]:
+    """Chat ids to send to, in order: CLI override -> Supabase -> env -> local file.
+
+    Supabase before the single-chat env var so a real subscriber list, once populated,
+    is used automatically without anyone having to remember to stop passing --chat-id.
+    """
+    if override:
+        return [override]
+    subs = SB.fetch_subscribers(channel="telegram")
+    if subs:
+        return [s["destination"] for s in subs]
+    if os.environ.get("TELEGRAM_CHAT_ID"):
+        return [os.environ["TELEGRAM_CHAT_ID"]]
+    if SUBS.exists():
+        return [s["chat_id"] for s in json.loads(SUBS.read_text()).get("subscribers", [])]
+    return []
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--area", default="KGIS-H-180901")
@@ -75,17 +96,20 @@ def main():
         print(text)
         return 0
 
-    chats = [args.chat_id] if args.chat_id else []
-    if not chats and os.environ.get("TELEGRAM_CHAT_ID"):
-        chats = [os.environ["TELEGRAM_CHAT_ID"]]
-    if not chats and SUBS.exists():
-        chats = [s["chat_id"] for s in json.loads(SUBS.read_text()).get("subscribers", [])]
+    chats = resolve_chats(args.chat_id)
     if not chats:
-        sys.exit("no chat id — set TELEGRAM_CHAT_ID or add services/telegram/subscribers.json")
+        sys.exit("no chat id — set TELEGRAM_CHAT_ID, add a Supabase subscriber, "
+                 "or add services/telegram/subscribers.json")
 
+    ok = 0
     for cid in chats:
         r = call(token, "sendMessage", chat_id=cid, text=text, parse_mode="Markdown")
         print(f"  {cid}: {'ok' if r.get('ok') else r}")
+        ok += 1 if r.get("ok") else 0
+
+    # Best-effort — a failed log must never undo a send that already went out.
+    SB.log_broadcast(area_ids=[args.area], event="p_dry7", lead="w1", channel="telegram",
+                     recipient_count=ok, triggered_by="cli")
     return 0
 
 

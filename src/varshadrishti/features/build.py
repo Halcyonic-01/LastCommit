@@ -58,8 +58,19 @@ def causal_features(season: pd.DataFrame, thresh: pd.Series) -> dict[str, pd.Dat
     return f
 
 
-def loyo_climatology(rain: pd.DataFrame, years, onset: pd.DataFrame) -> dict:
-    """Per (cell, day-of-year) climatology holding out each year in turn."""
+def loyo_climatology(rain: pd.DataFrame, years, onset: pd.DataFrame,
+                     full_record: bool = True) -> dict:
+    """Per (cell, season-day) climatology.
+
+    `full_record=True` (the default since P6) stores the SAME climatology inference uses,
+    over every season. That is deliberate: nothing reads these stored columns during
+    training — train_model.py and exp_p5b.py both overwrite them with each fold's own
+    climatology, which is what closed the leak — so the only thing the stored values are
+    good for is inference, and a leave-one-year-out value sitting on disk is a trap for
+    whoever next trains straight off the parquet.
+
+    Pass full_record=False to reproduce the pre-P6 per-row leave-one-year-out columns.
+    """
     # Keyed on days since 1 Jun, never day-of-year: a leap year shifts every doy by one,
     # so doy-keyed climatology silently fails to match at the season edges.
     doy_rain, doy_dry = {}, {}
@@ -71,7 +82,7 @@ def loyo_climatology(rain: pd.DataFrame, years, onset: pd.DataFrame) -> dict:
 
     out = {}
     for y in years:
-        others = [o for o in years if o != y]
+        others = list(years) if full_record else [o for o in years if o != y]
         rain_sum = sum(doy_rain[o] for o in others) / len(others)
         dry_sum = sum(doy_dry[o] for o in others) / len(others)
         o = onset[onset.year.isin(others)].groupby("cell_id")
@@ -85,14 +96,17 @@ def loyo_climatology(rain: pd.DataFrame, years, onset: pd.DataFrame) -> dict:
 def targets(rain: pd.DataFrame, season_idx: pd.DatetimeIndex, thresh: pd.Series) -> dict:
     """Forward-looking answers. Built on the FULL record so a late-September window
     can still see into October rather than being silently truncated to False."""
-    ev = L.daily_event_labels(rain)
+    ev = L.daily_event_labels(rain, thresh)
     out = {}
     # dry7 at every lead the app shows, plus short leads so the skill curve has a shape
     for h in LEAD_CURVE:
         out[f"y_dry7_{h}"] = L.within_horizon(ev["dry7_starts"], h).loc[season_idx]
-    for h in (7, 14):
+    # Every event the contract publishes needs all four leads. Anything missing here is a
+    # number the app has to invent — false onset had no model at all until now.
+    for h in HORIZONS:
         out[f"y_dry14_{h}"] = L.within_horizon(ev["dry14_starts"], h).loc[season_idx]
-    out["y_heavy_7"] = L.within_horizon(ev["heavy"], 7).loc[season_idx]
+        out[f"y_heavy_{h}"] = L.within_horizon(ev["heavy"], h).loc[season_idx]
+        out[f"y_false_onset_{h}"] = L.within_horizon(ev["false_onset_starts"], h).loc[season_idx]
 
     five = rain.rolling(L.WET_WINDOW_DAYS).sum()
     rainy5 = (rain >= L.RAINY_DAY_MM).rolling(L.WET_WINDOW_DAYS).sum()
