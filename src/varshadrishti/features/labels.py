@@ -136,7 +136,28 @@ def season_labels(rain: pd.DataFrame, year: int, thresh: pd.Series,
     return pd.DataFrame(rows)
 
 
-def daily_event_labels(rain: pd.DataFrame) -> dict[str, pd.DataFrame]:
+PHASES = ("pre_onset", "resow", "in_season")
+
+
+def onset_phase(rows: pd.DataFrame, onset: pd.DataFrame) -> np.ndarray:
+    """Which onset question is live per row: pre_onset (sow), resow, in_season (answered).
+
+    Pooling them lets persistence carry the score - 51% of cell-days are in_season, where
+    consecutive 5-day windows overlap and BSS is 2.4x the pre-onset one.
+    """
+    if "wet_spell_seen" not in rows:
+        raise KeyError("onset_phase needs the causal wet_spell_seen column")
+    o = rows[["year", "cell_id"]].merge(onset[["year", "cell_id", "onset_doy"]],
+                                        on=["year", "cell_id"], how="left")
+    # onset_doy is the spell's START; wet_spell_seen fires when it CLOSES, four days later
+    confirmed = o["onset_doy"].to_numpy(float) + (WET_WINDOW_DAYS - 1)
+    seen = rows["wet_spell_seen"].to_numpy() == 1
+    # in_season needs 30 days of hindsight, so only pre_onset is separable at forecast time
+    past = seen & np.isfinite(confirmed) & (rows["doy"].to_numpy(float) >= confirmed)
+    return np.where(~seen, "pre_onset", np.where(past, "in_season", "resow"))
+
+
+def daily_event_labels(rain: pd.DataFrame, thresh: pd.Series | None = None) -> dict[str, pd.DataFrame]:
     """Forward-looking event flags. These are TARGETS - never feed one back as a feature."""
     dry = rain < RAINY_DAY_MM
 
@@ -145,10 +166,21 @@ def daily_event_labels(rain: pd.DataFrame) -> dict[str, pd.DataFrame]:
         fwd = dry[::-1].rolling(days, min_periods=days).sum()[::-1]
         return (fwd >= days).fillna(False)
 
+    # a sowing rain that a 10-day near-dry window then kills — the headline label, and
+    # until now the one event the contract carried with no model behind it
+    five = rain.rolling(WET_WINDOW_DAYS).sum()
+    rainy5 = (rain >= RAINY_DAY_MM).rolling(WET_WINDOW_DAYS).sum()
+    cand = (five.ge(thresh, axis=1) & (rainy5 >= WET_WINDOW_RAINY)).fillna(False) \
+        if thresh is not None else pd.DataFrame(False, index=rain.index, columns=rain.columns)
+    fwd_dry = dry[::-1].rolling(FALSE_DRY_DAYS, min_periods=FALSE_DRY_DAYS).sum()[::-1]
+    kills = (fwd_dry >= FALSE_DRY_DAYS)
+    kill_soon = kills[::-1].rolling(FALSE_CHECK_DAYS, min_periods=1).sum()[::-1] > 0
+
     return {
         "dry7_starts": dry_run_ahead(DRY_SPELL_DAYS),
         "dry14_starts": dry_run_ahead(14),
         "heavy": (rain >= HEAVY_MM).fillna(False),
+        "false_onset_starts": (cand & kill_soon).fillna(False),
     }
 
 

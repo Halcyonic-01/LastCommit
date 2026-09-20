@@ -72,11 +72,34 @@ def real_skill():
         if lo <= 0:
             break
         horizon += 1
+    # the reliability diagram has existed in metrics.json since P5 and had nowhere to go
+    # until the contract gained a field for it; /verify draws the empty frame without it
+    bins = [{"forecast": round(float(b["p_mean"]), 4),
+             "observed": round(float(b["observed"]), 4),
+             "n": int(b["n"])}
+            for b in m["y_dry7_7"].get("reliability_curve", [])
+            if b["n"] >= 0.01 * m["y_dry7_7"]["n"]]
+    # A slot whose interval spans zero is not a forecast, whatever its point estimate
+    # says. The contract needs four leads per event so they still get published — named
+    # here so nothing downstream can dress them up as skill.
+    fam = {"p_onset": "y_onset", "p_false_onset": "y_false_onset", "p_dry7": "y_dry7",
+           "p_dry14": "y_dry14", "p_heavy": "y_heavy"}
+    no_skill = [f"{ev}_{w}" for ev, f in fam.items() for w, h in
+                (("w1", 7), ("w2", 14), ("w3", 21), ("w4", 28))
+                if m.get(f"{f}_{h}", {}).get("bss_ci95", [1.0])[0] <= 0]
     return {
         "bss": bss,
-        "reference": "per-cell, per-date climatology 1991-2024, leave-one-year-out",
+        **({"no_skill_slots": no_skill} if no_skill else {}),
+        # stated by the scorer that wrote metrics.json, so it cannot drift from the numbers
+        "reference": m.get("_provenance", {}).get(
+            "reference", "per-cell, per-season-day climatology"),
         "roc_auc": round(float(m["y_dry7_7"]["roc_auc"]), 4),
+        # The seasons the numbers were MEASURED on, which is not the training count. The
+        # UI quotes this as "evidence", so quoting 34 for a 5-season test set would lie.
+        **({"seasons_scored": int(m["y_dry7_7"]["n_seasons"])}
+           if "n_seasons" in m["y_dry7_7"] else {}),
         "advisory_horizon_weeks": max(1, horizon),
+        **({"reliability": {"bins": bins}} if bins else {}),
     }
 
 
@@ -100,7 +123,9 @@ def areas_from_geo(pilot_only: bool):
     """Real KGIS areas: district -> taluk -> hobli, real centroids, real cell counts."""
     import pandas as pd
 
+    from varshadrishti.data import rainfall as R
     from varshadrishti.geo import boundaries as B
+    from varshadrishti.geo import weights as W
 
     districts = B.attach_kannada_names(B.load_districts())
     districts["lgd_code"] = None
@@ -115,11 +140,15 @@ def areas_from_geo(pilot_only: bool):
         taluks = taluks[taluks["parent_id"].isin(keep_d)]
         hoblis = hoblis[hoblis["parent_id"].isin(set(taluks["area_id"]))]
 
+    # Cells the weight matrix names but IMD never fills (sea) are excluded: aggregation
+    # renormalises over the present cells, so counting them here would claim coverage the
+    # forecast does not have.
     n_cells = {}
     for level in ("districts", "blocks", "hoblis"):
         p = B.ROOT / "data" / "processed" / f"weights_imd_{level}.parquet"
         if p.exists():
-            n_cells.update(pd.read_parquet(p).groupby("area_id")["cell_id"].count().to_dict())
+            cov = W.coverage(pd.read_parquet(p), R.IMD_NO_DATA_CELLS)
+            n_cells.update(cov["n_cells"].to_dict())
 
     def clean(v):
         """pandas NaN would serialise as bare NaN — invalid JSON. Null means 'no match'."""
@@ -190,9 +219,11 @@ def main():
             "members": 51,
             "run_date": valid_from.isoformat(),
         },
-        "statistical": {"source": "LightGBM on IMD 0.25deg 1991-2024", "seasons": 34},
+        "statistical": {"source": "XGBoost on IMD 0.25deg 1991-2024", "seasons": 34},
         "blend_weights": c.leadset(0.80, 0.60, 0.40, 0.25),
-        "calibration": "isotonic, fitted on leave-one-year-out predictions",
+        "calibration": ("none on the statistical model — raw binary:logistic with a "
+                        "validation-tuned threshold; the linear pool is NOT "
+                        "recalibrated — see blend.beta_transform"),
     }
     skill = real_skill() or {
         # only until P5 has run — /verify shows a MOCK badge while this branch is taken
@@ -207,9 +238,7 @@ def main():
     sizes = c.emit_all(
         meta, provenance, skill, areas,
         out_dir=Path(args.out),
-        provenance_summary=(
-            "Based on 51 ECMWF ensemble members and 34 years of IMD rainfall for your hobli."
-        ),
+        provenance_summary=c.provenance_summary({"provenance": provenance}),
     )
 
     area_sizes = [v for k, v in sizes.items() if k.startswith("area/")]

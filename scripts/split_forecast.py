@@ -22,10 +22,7 @@ def main():
     latest = c.load_and_validate(d / "latest.json", "forecast.schema.json")
     meta, skill = latest["meta"], latest["skill"]
 
-    summary = (
-        f"Based on {latest['provenance']['nwp']['members']} ECMWF ensemble members and "
-        f"{latest['provenance']['statistical']['seasons']} years of IMD rainfall for your hobli."
-    )
+    summary = c.provenance_summary(latest)
 
     worst = 0
     for aid, body in latest["areas"].items():

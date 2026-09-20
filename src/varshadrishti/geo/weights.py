@@ -69,6 +69,22 @@ def cells_per_area(weights: pd.DataFrame) -> pd.Series:
     return weights.groupby("area_id")["cell_id"].count()
 
 
+def coverage(weights: pd.DataFrame, no_data_cells) -> pd.DataFrame:
+    """Per area: cells that actually carry data, and the weight lost with the rest.
+
+    `cells_per_area` counts every cell the matrix names, including ones the source never
+    fills. Publishing that as `n_cells` claims coverage the forecast does not have, so
+    anything user-facing counts with this instead.
+    """
+    dead = frozenset(no_data_cells)
+    live = weights[~weights["cell_id"].isin(dead)]
+    out = pd.DataFrame({
+        "n_cells": live.groupby("area_id")["cell_id"].count(),
+        "weight_lost": weights[weights["cell_id"].isin(dead)].groupby("area_id")["weight"].sum(),
+    }, index=pd.Index(weights["area_id"].unique(), name="area_id"))
+    return out.fillna({"n_cells": 0, "weight_lost": 0.0}).astype({"n_cells": int})
+
+
 def aggregate(values: pd.Series, weights: pd.DataFrame) -> pd.Series:
     """Area-weighted mean of a per-cell series, indexed by cell_id -> per area_id."""
     w = weights[weights["cell_id"].isin(values.index)].copy()

@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 warnings.filterwarnings("ignore")
 
-from varshadrishti.model import predict as P  # noqa: E402
+from varshadrishti.features import extended as EX  # noqa: E402
+from varshadrishti.model import predict_xgb as PX  # noqa: E402
 
 FEATURES = ROOT / "data" / "processed" / "features.parquet"
 
@@ -34,8 +35,11 @@ def main():
         print("no rows matched")
         return 1
 
+    # the boosters need train-only climatology and the extended predictors, not the
+    # full-period clim_* that features.parquet ships
+    df = EX.attach(df)
     out = pd.concat([df[["date", "cell_id"]].reset_index(drop=True),
-                     P.predict_all(df).reset_index(drop=True)], axis=1)
+                     PX.predict_all(df).reset_index(drop=True)], axis=1)
     if args.out:
         out.to_parquet(args.out, index=False)
         print(f"{len(out):,} rows -> {args.out}")

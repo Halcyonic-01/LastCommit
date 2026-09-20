@@ -11,8 +11,8 @@ SIH 2026 · PS 26086 · Ministry of Earth Sciences (MoES) / NCMRWF
 
 ## What it does
 
-ECMWF EC46 (51 members, 46 days) + a LightGBM model trained on 34 seasons of IMD rainfall
-and ENSO/IOD/MJO indices → blended by lead time, isotonically calibrated → probabilities of
+ECMWF EC46 (51 members, 46 days) + an XGBoost model trained on 34 seasons of IMD rainfall
+and ENSO/IOD/MJO indices → blended by lead time → probabilities of
 onset, false onset, dry spell and heavy rain at 1–4 weeks → ICAR-CRIDA-cited crop advisories
 → delivered in Kannada by voice, WhatsApp and Telegram.
 
@@ -34,7 +34,7 @@ Runs on GitHub Actions and static JSON. **₹0/month.**
 | Free disk | **~2 GB** | raw data 1.0 GB · `.venv` 650 MB · `node_modules` 160 MB |
 
 **Use 3.12.** The source compiles on 3.11–3.14, but 3.12 is what the pinned dependencies
-(`imdlib==0.1.21`, geopandas, lightgbm) are tested against here, and it is what CI will
+(`imdlib==0.1.21`, geopandas, xgboost) are tested against here, and it is what CI will
 use. If `python3` on your machine is something else, say `python3.12` explicitly below.
 
 macOS: `brew install python@3.12 node`. Ubuntu: `sudo apt install python3.12 python3.12-venv nodejs npm`.
@@ -216,20 +216,32 @@ a second.
 .venv/bin/python scripts/predict.py --date 2024-07-15 --limit 5
 ```
 
-That prints a calibrated probability per area for all 11 targets. In your own code:
+That prints a probability per area for all 20 targets. In your own code:
 
 ```python
-from varshadrishti.model import predict as P
-P.available()            # the 11 targets
-P.predict(df, "y_dry7_7")  # one target, a probability per row
-P.predict_all(df)          # all of them
+from varshadrishti.model import predict_xgb as PX
+PX.available()              # the 24 shipped models (20 events + 4 hazard weeks)
+PX.predict(df, "y_dry7_7")  # one target, a probability per row
+PX.predict_all(df)          # all 20 event targets
+PX.onset_survival_curve(df) # per-week onset hazard + cumulative curve
 ```
 
-`df` needs the feature columns, which come from `data/processed/features.parquet` — that
-file is NOT committed (63 MB), so build it once with `scripts/build_features.py`.
+`df` needs the feature columns. Build the base table once with `scripts/build_features.py`
+(`data/processed/features.parquet` is NOT committed, 54 MB), then attach the circulation
+and MJO predictors the boosters also expect:
 
-Inference needs only **lightgbm and numpy**: the calibration ships as two arrays replayed
-with `np.interp`, not a pickled scikit-learn object, so nothing breaks when versions move.
+```python
+from varshadrishti.features import extended as EX
+df = EX.attach(df)  # train-only climatology + 45 extended columns + ECMWF S2S
+```
+
+`EX.attach` is not optional. `features.parquet` ships `clim_*` as full-period 1991–2024
+means, but the boosters were fitted on 1991–2015 only; scoring them on the shipped columns
+leaks test-year information and silently overstates skill.
+
+Inference needs only **xgboost, pandas and numpy**. There is no calibration step — the
+boosters emit raw `binary:logistic` probabilities with a validation-tuned decision
+threshold in each model's `metadata.json`.
 
 **What the numbers mean.** Each is a probability between 0 and 1 for one area on one day —
 `y_dry7_7` is "a 7-day dry spell begins within the next 7 days". They are calibrated, so

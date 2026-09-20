@@ -17,7 +17,7 @@ fiona
 # Model
 pandas
 numpy
-lightgbm
+xgboost
 scikit-learn
 pyarrow
 
