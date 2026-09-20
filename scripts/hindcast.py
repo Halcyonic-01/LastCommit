@@ -89,12 +89,39 @@ def to_long(area_level: pd.DataFrame, level_name: str) -> pd.DataFrame:
     return pd.concat(rows, ignore_index=True)
 
 
+def write_animation_frames(long_df: pd.DataFrame, out_dir: Path) -> list[dict]:
+    """One compact block-level file per (event, lead): {dates, areas, frames}.
+
+    frames[date][area_id] = [pred, actual]. Split by event+lead, not one combined
+    file, because block level x 92 days x all 20 targets is ~5 MB uncompressed -- fine
+    to have on disk, wasteful to fetch at once for a map that only shows one at a time.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    block = long_df[long_df["level"] == "block"]
+    manifest = []
+    for (event, lead), g in block.groupby(["event", "lead"]):
+        wide = g.pivot_table(index=["date", "area_id"], columns="kind", values="value")
+        dates = sorted({d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d)
+                        for d in wide.index.get_level_values("date").unique()})
+        frames = {}
+        for (d, aid), row in wide.iterrows():
+            key = d.strftime("%Y-%m-%d") if hasattr(d, "strftime") else str(d)
+            frames.setdefault(key, {})[aid] = [round(float(row["pred"]), 4),
+                                               round(float(row["actual"]), 4)]
+        fname = f"{event}_{lead}.json"
+        (out_dir / fname).write_text(json.dumps({"dates": dates, "frames": frames}, default=str))
+        manifest.append({"event": event, "lead": lead, "file": fname,
+                         "n_areas": g["area_id"].nunique()})
+        log(f"  {fname}: {(out_dir / fname).stat().st_size / 1024:.0f} KB")
+    return manifest
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", default="2024-06-01")
     ap.add_argument("--end", default="2024-08-31")
     ap.add_argument("--out", default=str(PROC / "hindcast_2024.parquet"))
-    ap.add_argument("--web-out", default=str(ROOT / "forecast" / "hindcast" / "2024.json"))
+    ap.add_argument("--web-out", default=str(ROOT / "forecast" / "hindcast"))
     a = ap.parse_args()
 
     cell_level = compute_cell_level(a.start, a.end)
@@ -109,23 +136,14 @@ def main() -> int:
     long_df.to_parquet(a.out, index=False)
     log(f"wrote {a.out} ({len(long_df):,} rows)")
 
-    log("building the compact district-level scrubber payload")
-    district = long_df[long_df["level"] == "district"]
-    wide = district.pivot_table(index=["date", "area_id", "event", "lead"],
-                                columns="kind", values="value").reset_index()
-    payload = {}
-    for aid, g in wide.groupby("area_id"):
-        payload[aid] = {}
-        for d, gd in g.groupby(g["date"].astype(str)):
-            payload[aid][d] = {
-                f"{r.event}_{r.lead}": {"pred": round(float(r.pred), 4),
-                                        "actual": round(float(r.actual), 4)}
-                for r in gd.itertuples()
-            }
-    Path(a.web_out).parent.mkdir(parents=True, exist_ok=True)
-    Path(a.web_out).write_text(json.dumps(
-        {"start": a.start, "end": a.end, "level": "district", "areas": payload}, default=str))
-    log(f"wrote {a.web_out} ({Path(a.web_out).stat().st_size / 1024:.0f} KB)")
+    log("writing block-level animation frames, one file per event/lead")
+    web_out = Path(a.web_out)
+    manifest = write_animation_frames(long_df, web_out / "frames")
+
+    dates = sorted(long_df["date"].astype(str).unique())
+    (web_out / "manifest.json").write_text(json.dumps(
+        {"start": a.start, "end": a.end, "dates": dates, "frames": manifest}, default=str))
+    log(f"wrote {web_out / 'manifest.json'}")
     return 0
 
 

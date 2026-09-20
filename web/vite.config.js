@@ -55,7 +55,11 @@ export default defineConfig({
         // Precache the farmer shell only. The officer bundle is ~220 kB gzipped of
         // MapLibre — never push that down a 2G connection in the background.
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
-        globIgnores: ["**/Officer-*", "**/Verify-*", "**/Replay-*"],
+        // HazardMap bundles MapLibre and is now a separate chunk shared by Officer and
+        // Replay (Vite hoists a module imported by two lazy chunks into its own) --
+        // without excluding it too, the farmer's precache silently pulls in all of
+        // MapLibre again through the back door.
+        globIgnores: ["**/Officer-*", "**/Verify-*", "**/Replay-*", "**/HazardMap-*"],
         // the farmer's own area file and the index must survive going offline
         runtimeCaching: [
           {

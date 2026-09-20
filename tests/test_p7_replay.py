@@ -21,25 +21,37 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 FORECAST_HC = ROOT / "forecast" / "hindcast"
+EVENTS = ("onset", "false_onset", "dry7", "dry14", "heavy")
+LEADS = ("w1", "w2", "w3", "w4")
 
 
-@pytest.mark.skipif(not (FORECAST_HC / "2024.json").exists(),
+@pytest.mark.skipif(not (FORECAST_HC / "manifest.json").exists(),
                     reason="run scripts/hindcast.py first")
-def test_scrubber_payload_shape_matches_what_replay_jsx_reads():
-    d = json.loads((FORECAST_HC / "2024.json").read_text())
-    assert d["level"] == "district"
-    assert len(d["areas"]) == 30, "one entry per district"
+def test_manifest_lists_every_event_lead_frame_file():
+    m = json.loads((FORECAST_HC / "manifest.json").read_text())
+    have = {(f["event"], f["lead"]) for f in m["frames"]}
+    want = {(e, w) for e in EVENTS for w in LEADS}
+    assert have == want, f"missing {want - have}"
+    for f in m["frames"]:
+        assert (FORECAST_HC / "frames" / f["file"]).exists()
 
-    one = next(iter(d["areas"].values()))
-    a_date = next(iter(one.values()))
-    # Replay.jsx indexes day[f"{event}_w1"] -- if the key shape ever changes there,
-    # this is the test that should fail, not a silently-blank scrubber in the browser.
-    for event in ("onset", "false_onset", "dry7", "dry14", "heavy"):
-        for lead in ("w1", "w2", "w3", "w4"):
-            key = f"{event}_{lead}"
-            assert key in a_date, f"missing {key}"
-            assert 0.0 <= a_date[key]["pred"] <= 1.0
-            assert a_date[key]["actual"] in (0.0, 1.0) or 0.0 <= a_date[key]["actual"] <= 1.0
+
+@pytest.mark.skipif(not (FORECAST_HC / "frames" / "false_onset_w1.json").exists(),
+                    reason="run scripts/hindcast.py first")
+def test_frame_file_shape_matches_what_replay_jsx_reads():
+    d = json.loads((FORECAST_HC / "frames" / "false_onset_w1.json").read_text())
+    assert len(d["dates"]) == 92, "Jun 1 - Aug 31 2024"
+    assert d["dates"] == sorted(d["dates"]), "frontend indexes by position, must be chronological"
+
+    a_date = d["frames"][d["dates"][0]]
+    assert len(a_date) == 227, "block level"
+    one = next(iter(a_date.values()))
+    # Replay.jsx destructures [pred, actual] positionally -- if this shape ever
+    # changes, this is the test that should fail, not a silently-blank map.
+    assert isinstance(one, list) and len(one) == 2
+    pred, actual = one
+    assert 0.0 <= pred <= 1.0
+    assert 0.0 <= actual <= 1.0
 
 
 @pytest.mark.skipif(not (FORECAST_HC / "spotlight.json").exists(),
@@ -56,6 +68,17 @@ def test_spotlight_story_is_internally_consistent():
     for d in dry_days:
         assert s["rain_mm"][d] == 0.0, f"{d} should be dry per the narrative"
     assert s["rain_mm"]["2024-08-20"] > 40, "the heavy-rain day the story opens on"
+
+
+@pytest.mark.skipif(not (FORECAST_HC / "frames" / "false_onset_w1.json").exists(),
+                    reason="run scripts/hindcast.py first")
+def test_spotlight_date_and_area_are_reachable_in_the_frame_data():
+    """showSpotlight() in Replay.jsx does dates.indexOf(spotlight.forecast_date) -- if
+    the two files ever disagree on the date, "show on the map" silently does nothing."""
+    s = json.loads((FORECAST_HC / "spotlight.json").read_text())
+    d = json.loads((FORECAST_HC / "frames" / "false_onset_w1.json").read_text())
+    assert s["forecast_date"] in d["dates"]
+    assert s["area_id"] in d["frames"][s["forecast_date"]]
 
 
 def test_aggregate_to_areas_clip_is_backward_compatible():
