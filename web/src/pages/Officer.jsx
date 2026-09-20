@@ -7,8 +7,13 @@ import { karteFor } from "../i18n/strings.js";
 
 // Two ramps, two meanings. Water hazards run blue; dry hazards run amber to red.
 // There is no single "good to bad" rainbow, because rain is not a severity.
-const DRY   = ["#2a3036", "#6b5526", "#a8761a", "#c05a2c", "#9a2a18"];
-const WATER = ["#2a3036", "#20486a", "#12527f", "#2f79ad", "#5aa3dc"];
+// Ramp step 0 is deliberately the map's OWN background color, not a hue — low risk
+// recedes into the panel rather than being "a colour", so only real risk pops. All
+// three no-signal spots (the ramp, the pre-data placeholder, and "no data at all")
+// share this one constant so a future theme change can't desync them again.
+const BASE  = "#ece5d6";
+const DRY   = [BASE, "#6b5526", "#a8761a", "#c05a2c", "#9a2a18"];
+const WATER = [BASE, "#20486a", "#12527f", "#2f79ad", "#5aa3dc"];
 const HAZARDS = [
   { key: "p_dry7",        label: "Dry spell 7d",  ramp: DRY,   note: "7 consecutive days under 2.5 mm" },
   { key: "p_dry14",       label: "Dry spell 14d", ramp: DRY,   note: "14 consecutive dry days" },
@@ -36,25 +41,33 @@ export default function Officer() {
     map.current = new maplibregl.Map({
       container: el.current,
       // No tile provider — the polygons are the map. Offline-capable and free.
-      style: { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#ece5d6" } }] },
+      style: { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": BASE } }] },
       center: [76.6, 15.0], zoom: 5.5, attributionControl: false,
     });
     map.current.on("load", async () => {
       const geo = await fetch("/geo/blocks.geojson").then((r) => r.json());
       geo.features.forEach((f, i) => { f.id = i; f.properties.__i = i; });
       map.current.addSource("blocks", { type: "geojson", data: geo, promoteId: "__i" });
-      map.current.addLayer({ id: "fill", type: "fill", source: "blocks", paint: { "fill-color": "#2a3036", "fill-opacity": 0.95 } });
+      map.current.addLayer({ id: "fill", type: "fill", source: "blocks", paint: { "fill-color": BASE, "fill-opacity": 0.95 } });
       map.current.addLayer({ id: "line", type: "line", source: "blocks", paint: { "line-color": "#14171a", "line-width": 0.6 } });
-      map.current.addLayer({ id: "hl", type: "line", source: "blocks", paint: { "line-color": "#eef1f3", "line-width": 2 }, filter: ["==", ["get", "__i"], -1] });
+      // A single-color highlight can't stay visible against every ramp step (a light
+      // hover line disappears over the now-light BASE, a dark one disappears over the
+      // dark end of a ramp) — a dark casing under a light line reads over anything.
+      map.current.addLayer({ id: "hl-halo", type: "line", source: "blocks",
+        paint: { "line-color": "#17140f", "line-width": 4 }, filter: ["==", ["get", "__i"], -1] });
+      map.current.addLayer({ id: "hl", type: "line", source: "blocks",
+        paint: { "line-color": "#fbf8f1", "line-width": 2 }, filter: ["==", ["get", "__i"], -1] });
       map.current.on("mousemove", "fill", (e) => {
         const f = e.features?.[0]; if (!f) return;
         map.current.getCanvas().style.cursor = "pointer";
         map.current.setFilter("hl", ["==", ["get", "__i"], f.properties.__i]);
+        map.current.setFilter("hl-halo", ["==", ["get", "__i"], f.properties.__i]);
         setHover(f.properties);
       });
       map.current.on("mouseleave", "fill", () => {
         map.current.getCanvas().style.cursor = "";
         map.current.setFilter("hl", ["==", ["get", "__i"], -1]);
+        map.current.setFilter("hl-halo", ["==", ["get", "__i"], -1]);
         setHover(null);
       });
       map.current.fitBounds([[73.9, 11.4], [78.8, 18.6]], { padding: 16, duration: 0 });
@@ -69,7 +82,7 @@ export default function Officer() {
       const src = map.current.getSource("blocks");
       if (!src?._data) return;
       map.current.setPaintProperty("fill", "fill-color", [
-        "case", ["==", ["feature-state", "p"], null], "#20262b",
+        "case", ["==", ["feature-state", "p"], null], BASE,
         ["step", ["feature-state", "p"], H.ramp[0], 0.2, H.ramp[1], 0.4, H.ramp[2], 0.6, H.ramp[3], 0.8, H.ramp[4]],
       ]);
       for (const f of src._data.features) {

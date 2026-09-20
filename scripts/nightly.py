@@ -96,6 +96,13 @@ def build_cell_probabilities(as_of: str, offline: bool):
     row = I.live_features(obs, as_of, thresh, clim)
     stat = I.statistical(row)
 
+    # Today minus this area's climatological onset date, in weeks (schema's own
+    # definition). Only meaningful before onset has actually happened -- deep in the
+    # season this keeps growing and stops meaning "how late is onset running", so the
+    # caller only publishes it while onset_status == "pre_monsoon".
+    onset_delay = ((row.set_index("cell_id")["doy"] - row.set_index("cell_id")["clim_onset_doy"])
+                  / 7.0).to_frame("onset_delay_weeks")
+
     log("NWP ensemble member fractions")
     parts = []
     for model in ("ec46", "gefs"):
@@ -115,7 +122,7 @@ def build_cell_probabilities(as_of: str, offline: bool):
         "blend_sources": sources,
         "nwp_models": ["ec46", "gefs"][: len(parts)],
     }
-    return blended, diag, thresh
+    return blended, diag, thresh, onset_delay
 
 
 def main():
@@ -128,12 +135,14 @@ def main():
 
     t0 = time.time()
     log(f"nightly run for {a.as_of} (offline={a.offline})")
-    cells_df, diag, thresh = build_cell_probabilities(a.as_of, a.offline)
+    cells_df, diag, thresh, onset_delay = build_cell_probabilities(a.as_of, a.offline)
 
     log("area-weighted aggregation")
-    per_area = {}
+    per_area, delay_by_area = {}, {}
     for layer in ("district", "block", "panchayat"):
         per_area[layer] = A.to_areas(cells_df, layer)
+        # Schema's own bounds, not a probability's [0, 1] -- see aggregate.to_areas.
+        delay_by_area[layer] = A.to_areas(onset_delay, layer, clip=(-8.0, 12.0))
         log(f"  {layer}: {len(per_area[layer])}")
 
     sys.path.insert(0, str(ROOT / "scripts"))
@@ -159,6 +168,14 @@ def main():
         area.p_dry14 = ls("p_dry14")
         area.p_heavy = ls("p_heavy")
         area.onset_status = "in_season" if 6 <= month <= 9 else "pre_monsoon"
+        # Real, area-weighted, clipped to the schema's own [-8, 12] week bounds -- the
+        # same definition the schema documents, not gated on onset_status, which is a
+        # coarse Jun-Sep calendar bucket rather than a per-area onset-happened flag.
+        dtab = delay_by_area.get(area.level)
+        area.onset_delay_weeks = (
+            float(dtab.loc[area.area_id, "onset_delay_weeks"])
+            if dtab is not None and area.area_id in dtab.index else None
+        )
         # dry spell is the weak target (negative in 10/34 seasons); say so in the contract
         area.confidence = month_confidence(month, weak_target=area.p_dry7["w1"] >= 0.25)
         area.advisories = E.evaluate({
