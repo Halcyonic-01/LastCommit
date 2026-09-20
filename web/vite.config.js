@@ -55,7 +55,7 @@ export default defineConfig({
         // Precache the farmer shell only. The officer bundle is ~220 kB gzipped of
         // MapLibre — never push that down a 2G connection in the background.
         globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
-        globIgnores: ["**/Officer-*", "**/Verify-*"],
+        globIgnores: ["**/Officer-*", "**/Verify-*", "**/Replay-*"],
         // the farmer's own area file and the index must survive going offline
         runtimeCaching: [
           {

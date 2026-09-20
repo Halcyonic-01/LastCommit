@@ -116,9 +116,14 @@ export default function Officer() {
             KARNATAKA · {latest ? Object.keys(latest.areas).length : "—"} AREAS · RUN {latest?.provenance?.nwp?.run_date ?? "—"} · {latest?.meta?.model_version ?? ""}
           </div>
         </div>
-        <Link to="/verify" className="ops-mono" style={{ fontSize: 12, color: "var(--ink)", borderBottom: "1px solid var(--rule2)", paddingBottom: 2 }}>
-          FORECAST VERIFICATION →
-        </Link>
+        <div style={{ display: "flex", gap: 18 }}>
+          <Link to="/replay" className="ops-mono" style={{ fontSize: 12, color: "var(--ink)", borderBottom: "1px solid var(--rule2)", paddingBottom: 2 }}>
+            REPLAY 2024 →
+          </Link>
+          <Link to="/verify" className="ops-mono" style={{ fontSize: 12, color: "var(--ink)", borderBottom: "1px solid var(--rule2)", paddingBottom: 2 }}>
+            FORECAST VERIFICATION →
+          </Link>
+        </div>
       </header>
 
       {/* lead selector reads as a timeline, and visibly stops being advisable */}

@@ -125,17 +125,17 @@ def build_cell_probabilities(as_of: str, offline: bool):
     return blended, diag, thresh, onset_delay
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--as-of", default=date.today().isoformat())
-    ap.add_argument("--offline", action="store_true", help="cache only, no network")
-    ap.add_argument("--out", default=str(ROOT / "forecast"))
-    ap.add_argument("--pilot-only", action="store_true")
-    a = ap.parse_args()
+def run_one_day(as_of: str, offline: bool, out: Path, pilot_only: bool = False,
+                model_version: str = "1.0.0-live") -> tuple[dict, dict]:
+    """One day, start to finish: fetch/replay -> model -> areas -> contract files.
 
+    Shared by the live nightly job and scripts/hindcast.py, so a hindcast run goes
+    through the exact same code a real night does -- no separate, unverified path.
+    Returns (file sizes, diagnostics) so a caller can log or aggregate across days.
+    """
     t0 = time.time()
-    log(f"nightly run for {a.as_of} (offline={a.offline})")
-    cells_df, diag, thresh, onset_delay = build_cell_probabilities(a.as_of, a.offline)
+    log(f"nightly run for {as_of} (offline={offline})")
+    cells_df, diag, thresh, onset_delay = build_cell_probabilities(as_of, offline)
 
     log("area-weighted aggregation")
     per_area, delay_by_area = {}, {}
@@ -150,9 +150,9 @@ def main():
 
     log("assembling areas + CRIDA advisories")
     packs = E.load_rules()
-    month = pd.Timestamp(a.as_of).month
+    month = pd.Timestamp(as_of).month
     areas = []
-    for area in areas_from_geo(a.pilot_only):
+    for area in areas_from_geo(pilot_only):
         tab = per_area.get(area.level)
         if tab is None or area.area_id not in tab.index:
             continue
@@ -187,7 +187,7 @@ def main():
         areas.append(area)
     log(f"  {len(areas)} areas with advisories")
 
-    meta = c.make_meta(valid_from=date.fromisoformat(a.as_of), model_version="1.0.0-live",
+    meta = c.make_meta(valid_from=date.fromisoformat(as_of), model_version=model_version,
                        state="karnataka", code_system="kgis", is_mock=False)
     # The weight caveat travels with every file. `skill` and `provenance` are both closed
     # to extra keys by the frozen schema, but provenance.nwp allows them — which is the
@@ -196,7 +196,7 @@ def main():
         "nwp": {
             "source": "ECMWF EC46 + NOAA GEFS via Open-Meteo",
             "members": 81,
-            "run_date": a.as_of,
+            "run_date": as_of,
             "weight_provenance": BL.WEIGHT_PROVENANCE,
         },
         "statistical": {
@@ -216,24 +216,36 @@ def main():
     # indices are ingested; each acts where it measurably works — MJO in the model,
     # ENSO as seasonal context, IOD reported with its own null result.
     from varshadrishti.pipeline import teleconnection as TC  # noqa: PLC0415
-    tele = TC.current(a.as_of)
+    tele = TC.current(as_of)
     if tele:
         provenance["teleconnection"] = tele
         log(f"  ENSO {tele['enso_phase']} (ONI {tele['oni']}) — "
             f"model reliability {tele['model_reliability']}")
     skill = real_skill() or {}
 
-    out = Path(a.out)
     # the same builder split_forecast.py uses, so a web build cannot overwrite these
     # files with differently-worded ones
     summary = c.provenance_summary({"provenance": provenance})
     sizes = c.emit_all(meta, provenance, skill, areas, out_dir=out,
                        provenance_summary=summary)
-    (MODELS / "last_run.json").write_text(json.dumps(
-        {"as_of": a.as_of, "generated_at": datetime.now(timezone.utc).isoformat(),
-         "seconds": round(time.time() - t0, 1), **diag}, indent=1, default=str))
+    diag["seconds"] = round(time.time() - t0, 1)
     log(f"wrote {len(sizes)} files in {time.time() - t0:.0f}s | "
         f"largest area file {max(v for k, v in sizes.items() if k.startswith('area/'))} B")
+    return sizes, diag
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--as-of", default=date.today().isoformat())
+    ap.add_argument("--offline", action="store_true", help="cache only, no network")
+    ap.add_argument("--out", default=str(ROOT / "forecast"))
+    ap.add_argument("--pilot-only", action="store_true")
+    a = ap.parse_args()
+
+    sizes, diag = run_one_day(a.as_of, a.offline, Path(a.out), a.pilot_only)
+    (MODELS / "last_run.json").write_text(json.dumps(
+        {"as_of": a.as_of, "generated_at": datetime.now(timezone.utc).isoformat(), **diag},
+        indent=1, default=str))
     return 0
 
 

@@ -12,6 +12,7 @@ import { t } from "./i18n/strings.js";
 // that off a farmer's 2G connection entirely; it only loads if an officer asks.
 const Officer = lazy(() => import("./pages/Officer.jsx"));
 const Verify  = lazy(() => import("./pages/Verify.jsx"));
+const Replay  = lazy(() => import("./pages/Replay.jsx"));
 const Ops = ({ children }) => (
   <Suspense fallback={<div className="ops" style={{ padding: 20, fontSize: 13 }}>Loading operations tools…</div>}>
     {children}
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/rain" element={<RainReport />} />
         <Route path="/officer" element={<Ops><Officer /></Ops>} />
         <Route path="/verify" element={<Ops><Verify /></Ops>} />
+        <Route path="/replay" element={<Ops><Replay /></Ops>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
