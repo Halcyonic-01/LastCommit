@@ -83,7 +83,7 @@ export default function RainReport() {
 
       {/* Three plates. Each fills a third of the screen — impossible to mis-tap
           with one hand, and readable without reading. */}
-      <div className="grow" style={{ display: "flex", flexDirection: "column" }}>
+      <div className="grow" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {CHOICES.map((c) => {
           const on = picked === c.id;
           return (

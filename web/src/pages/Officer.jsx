@@ -36,7 +36,7 @@ export default function Officer() {
     map.current = new maplibregl.Map({
       container: el.current,
       // No tile provider — the polygons are the map. Offline-capable and free.
-      style: { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#14171a" } }] },
+      style: { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#ece5d6" } }] },
       center: [76.6, 15.0], zoom: 5.5, attributionControl: false,
     });
     map.current.on("load", async () => {
@@ -93,17 +93,17 @@ export default function Officer() {
 
   return (
     <div className="ops">
-      <header style={{ borderBottom: "1px solid var(--rule2)", padding: "13px 20px", display: "flex",
+      <header style={{ background: "var(--paper3)", borderBottom: "1px solid var(--rule2)", padding: "13px 20px", display: "flex",
         alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <div className="kn" style={{ fontSize: 21, fontWeight: 800, lineHeight: 1 }}>
+          <div className="kn" style={{ fontSize: 21, fontWeight: 800, lineHeight: 1, color: "var(--ink)" }}>
             ವರ್ಷದೃಷ್ಟಿ <span className="ops-mono" style={{ fontSize: 11, fontWeight: 400, color: "var(--ink3)", letterSpacing: ".1em" }}>OPERATIONS</span>
           </div>
           <div className="ops-mono" style={{ fontSize: 11, color: "var(--ink2)", marginTop: 4 }}>
             KARNATAKA · {latest ? Object.keys(latest.areas).length : "—"} AREAS · RUN {latest?.provenance?.nwp?.run_date ?? "—"} · {latest?.meta?.model_version ?? ""}
           </div>
         </div>
-        <Link to="/verify" className="ops-mono" style={{ fontSize: 12, borderBottom: "1px solid var(--rule2)", paddingBottom: 2 }}>
+        <Link to="/verify" className="ops-mono" style={{ fontSize: 12, color: "var(--ink)", borderBottom: "1px solid var(--rule2)", paddingBottom: 2 }}>
           FORECAST VERIFICATION →
         </Link>
       </header>
@@ -190,7 +190,7 @@ export default function Officer() {
                     <tr key={a.area_id} style={{ background: on ? "var(--paper3)" : "transparent" }}>
                       <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--rule)" }}>
                         <input type="checkbox" checked={on} onChange={() => toggle(a.area_id)}
-                          aria-label={`Queue ${a.name_en} for broadcast`} style={{ accentColor: "#5aa3dc", width: 16, height: 16 }} />
+                          aria-label={`Queue ${a.name_en} for broadcast`} style={{ accentColor: "var(--water2)", width: 16, height: 16 }} />
                       </td>
                       <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--rule)" }}>
                         <span className="kn" style={{ fontWeight: 700 }}>{a.name_kn || a.name_en}</span>
@@ -223,8 +223,8 @@ export default function Officer() {
           {queued.length} TALUK{queued.length === 1 ? "" : "S"} QUEUED
         </div>
         <button type="button" disabled={!queued.length || beyond}
-          style={{ padding: "11px 20px", fontSize: 13, fontWeight: 700, background: queued.length && !beyond ? "#5aa3dc" : "var(--paper3)",
-            color: queued.length && !beyond ? "#0d1418" : "var(--ink3)", border: "none" }}>
+          style={{ padding: "11px 20px", fontSize: 13, fontWeight: 700, background: queued.length && !beyond ? "var(--water2)" : "var(--paper3)",
+            color: queued.length && !beyond ? "var(--paper2)" : "var(--ink3)", border: "none" }}>
           Review broadcast →
         </button>
         <div className="ops-mono" style={{ fontSize: 10.5, color: "var(--ink3)" }}>

@@ -87,7 +87,7 @@ img { display: block; max-width: 100%; }
 .notice.-ok    { border-left-color: var(--ok); }
 
 /* ---- photo band ------------------------------------------------------- */
-.band { position: relative; overflow: hidden; background: var(--paper3); }
+.band { position: relative; overflow: hidden; background: var(--paper3); border-radius: 6px; }
 /* Hero heights live here, not in an inline style — an inline height makes
    aspect-ratio derive the WIDTH at the breakpoint and the photo spills out. */
 .band.-hero { height: 34vh; }
@@ -159,7 +159,8 @@ img { display: block; max-width: 100%; }
 /* A screen that must be answerable in one look, with one hand, without scrolling. */
 .oneview { height: 100dvh; max-height: 100dvh; overflow: hidden; }
 .oneview .grow { min-height: 0; }
-.oneview .plate { flex: 1 1 0; min-height: 0; }
+.oneview .plate { flex: 1 1 0; min-height: 0; transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease; border-radius: 8px; overflow: hidden; cursor: pointer; }
+.oneview .plate:hover { transform: scale(1.02); z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 /* plates carry a word at display size, so they need more scrim than a hero band */
 .plate .scrim { background: linear-gradient(to bottom, rgba(12,10,7,.12) 20%, rgba(12,10,7,.45) 58%, rgba(12,10,7,.88) 100%); }
 
@@ -170,11 +171,20 @@ img { display: block; max-width: 100%; }
    button across the full 1080px shell. No-op at phone width. */
 .colmax { max-width: 620px; }
 
-/* ---- officer surface: same semantics, inverted ground ------------------ */
-.ops { --paper: #14171a; --paper2: #1b1f23; --paper3: #21262b;
-       --ink: #eef1f3; --ink2: #9aa4ac; --ink3: #6f7981;
-       --rule: #2b3238; --rule2: #3a434b;
-       --water2: #5aa3dc; --wait: #d29a33; --risk: #d9563c; --ok: #4e9c74;
+/* ---- officer surface: light theme scoped to officer panel ---------------- */
+.ops { 
+       --paper:  #f4efe4;
+       --paper2: #fbf8f1;
+       --paper3: #ece5d6;
+       --ink:    #17140f;
+       --ink2:   #5e564a;
+       --ink3:   #8c8270;
+       --rule:   #ddd3c0;
+       --rule2:  #c9bca3;
+       --water2: #3d86be;
+       --wait:   #a8761a;
+       --risk:   #9a2a18;
+       --ok:     #2c6247;
        background: var(--paper); color: var(--ink); min-height: 100%; }
 .ops .num, .ops table { font-variant-numeric: tabular-nums; }
 .ops-mono { font-family: ui-monospace, "SF Mono", "Roboto Mono", Menlo, monospace; }
