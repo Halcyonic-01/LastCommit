@@ -68,7 +68,9 @@ def main():
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
                 sf.write(f.name, tone, 16000)
                 wav_path = f.name
-            wav, sr = torchaudio.load(wav_path)
+            wav_np, sr = sf.read(wav_path, dtype="float32")
+            import torch
+            wav = torch.from_numpy(wav_np).reshape(1, -1)
             os.unlink(wav_path)
             out = model(wav, lang, "ctc")
             results[lang] = {"status": "PASS", "output": str(out)[:40]}

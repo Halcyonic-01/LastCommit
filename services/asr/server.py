@@ -153,16 +153,19 @@ def _convert_to_wav(input_bytes: bytes, suffix: str = ".webm") -> str | None:
 
 def _transcribe(wav_path: str, lang: str) -> str | None:
     import torch
-    import torchaudio
+    import soundfile as sf
     model = _load_model()
     if model is None:
         return None
     try:
-        wav, sr = torchaudio.load(wav_path)
-        wav = torch.mean(wav, dim=0, keepdim=True)
-        if sr != 16000:
-            resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000)
-            wav = resampler(wav)
+        # Use soundfile directly to bypass torchaudio backend issues
+        audio_data, sr = sf.read(wav_path, dtype="float32")
+        if audio_data.ndim == 1:
+            audio_data = audio_data.reshape(1, -1)
+        else:
+            audio_data = audio_data.T
+        wav = torch.from_numpy(audio_data)
+
         # Map our 2-letter codes to IndicConformer's expected codes
         lang_map = {"kn": "kn", "hi": "hi", "te": "te", "en": "en"}
         lc = lang_map.get(lang, "kn")
