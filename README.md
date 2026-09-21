@@ -59,9 +59,9 @@ The solution is to:
 
 ```mermaid
 flowchart LR
-    A[IMD gridded rainfall\n1991-2024] --> B[Feature and label builder]
-    C[Climate indices\nMJO/circulation/teleconnections] --> B
-    D[ECMWF EC46 / GEFS\nensemble rainfall] --> E[NWP member probabilities]
+    A[IMD gridded rainfall<br/>1991-2024] --> B[Feature and label builder]
+    C[Climate indices<br/>MJO / circulation / teleconnections] --> B
+    D[ECMWF EC46 / GEFS<br/>ensemble rainfall] --> E[NWP member probabilities]
     B --> F[XGBoost event models]
     F --> G[Statistical probabilities]
     E --> H[Lead-dependent blend]
@@ -69,11 +69,15 @@ flowchart LR
     H --> I[Area-weighted aggregation]
     I --> J[CRIDA finite-rule advisories]
     J --> K[forecast JSON contract]
-    K --> L[React/Vite farmer PWA]
-    K --> M[Officer send: farmer app / WhatsApp]
-    N[Farmer rain report] --> O[Supabase rain_reports]
-    O --> P[Officer dashboard]
-    Q[Local ASR/TTS services] <--> L
+    K --> L[Farmer PWA<br/>Today / Why / Messages]
+    K --> M[Officer dashboard]
+    M -->|reviewed send| N[Notification dispatcher]
+    N --> O[(farmer_messages)]
+    O --> L
+    N -.simulated.-> P[WhatsApp / SMS]
+    Q[Farmer rain report] --> R[(rain_reports)]
+    R --> M
+    S[Local ASR / TTS] <--> L
 ```
 
 ### Forecast generation
@@ -93,49 +97,68 @@ flowchart TB
       IDX[Indices: MJO, circulation, ENSO/IOD context]
       ECM[ECMWF S2S reforecast features]
       GEO[GeoJSON boundaries and area weights]
-      CRIDA[ICAR-CRIDA PDFs and YAML rules]
+      CRIDA[ICAR-CRIDA PDFs and YAML rule packs]
     end
+
     subgraph ML[Model layer]
-      FE[Feature/label construction]
+      FE[Feature / label construction]
       XGB[20 event XGBoost bundles]
       HAZ[4 onset hazard bundles]
-      NWP[NWP ensemble fractions]
+      NWP[NWP ensemble member fractions]
       BL[Static lead-dependent blend]
     end
-    subgraph Runtime[Runtime and delivery]
+
+    subgraph Runtime[Nightly job and contract]
       NIGHT[scripts/nightly.py]
-      CONTRACT[forecast JSON contract]
-      WEB[React/Vite PWA]
-      SB[(Supabase: reports/messages/subscribers/logs)]
+      RULES[rules/engine.py<br/>finite CRIDA rules]
+      CONTRACT[forecast JSON contract<br/>latest + per-area files]
+    end
+
+    subgraph Delivery[Delivery]
+      WEB[Farmer PWA]
+      MSG[Messages screen]
+      OFF[Officer dashboard]
+      BROADCAST[Officer boundary :8787<br/>holds every secret]
+      DISP[services/notify dispatcher]
+      WA[WhatsApp / SMS<br/>simulated until metered keys are set]
       ASR[ASR :8766]
       TTS[TTS :8765]
-      BROADCAST[Officer broadcast :8787]
-      MSG[Farmer notification page]
-      WA[Meta WhatsApp Cloud API - optional]
+      SB[(Supabase)]
     end
+
     IMD --> FE
     ERA --> FE
     CH --> FE
     IDX --> FE
     ECM --> FE
-    GEO --> FE
-    CRIDA --> NIGHT
     FE --> XGB
+    FE --> HAZ
     XGB --> BL
+    HAZ --> BL
     NWP --> BL
     BL --> NIGHT
-    NIGHT --> CONTRACT
+    GEO --> NIGHT
+    CRIDA --> RULES
+    NIGHT --> RULES
+    RULES --> CONTRACT
+
     CONTRACT --> WEB
-    CONTRACT --> TG
-    CONTRACT --> WA
+    CONTRACT --> OFF
+    CONTRACT --> BROADCAST
     WEB <--> ASR
     WEB <--> TTS
     WEB --> SB
-    WEB --> BROADCAST
-    BROADCAST --> SB
-    BROADCAST --> TG
-    BROADCAST --> WA
+    OFF --> BROADCAST
+    BROADCAST --> DISP
+    DISP --> SB
+    DISP -.simulated.-> WA
+    SB --> MSG
+    MSG --- WEB
 ```
+
+The officer boundary is the only process holding a secret. The browser never sees the
+Supabase service key or a provider token — it holds a shared passcode, and the farmer's
+copy of an advisory arrives through `farmer_messages`, which carries no personal data.
 
 ## Machine-learning report
 
