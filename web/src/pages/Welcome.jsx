@@ -64,7 +64,7 @@ export default function Welcome() {
             <div className="rubric">Language · ಭಾಷೆ</div>
             <div className="h2" style={{ marginTop: 2 }}>{t("pickLang", lang)}</div>
           </div>
-          <Speak text={S.pickLang.kn} lang={lang} variant="icon" />
+          <Speak text={pick(S.pickLang, lang)} lang={lang} variant="icon" />
         </div>
 
         {/* Four plates, each set in its own script at display size. The script is

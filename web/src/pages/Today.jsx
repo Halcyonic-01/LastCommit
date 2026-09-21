@@ -34,7 +34,12 @@ export default function Today() {
   const spoken = [
     pick(state.speak, lang),
     tpl("tenYears", lang, ten),
-    adv ? pick({ kn: adv.action_kn, en: adv.action_en }, lang) : "",
+    // Advisory payloads currently have Kannada and English only. Never read
+    // English as if it were Hindi or Telugu; the localized verdict above is
+    // the important actionable description for those languages.
+    adv && (lang === "kn" || lang === "en")
+      ? (lang === "kn" ? adv.action_kn : adv.action_en)
+      : "",
   ].filter(Boolean).join(" ");
 
   return (
@@ -43,7 +48,10 @@ export default function Today() {
       <div className="pad rule-b" style={{ paddingTop: 11, paddingBottom: 10, display: "flex", alignItems: "center", gap: 9 }}>
         <Pin size={17} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="kn" style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.15 }}>{f.name_kn || f.name_en}</div>
+          <div className="kn" style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.15 }}>
+            {lang === "en" ? f.name_en : (f.name_kn || f.name_en)}
+          </div>
+          {lang !== "en" && f.name_en ? <div className="gloss">{f.name_en}</div> : null}
           <div className="cap" style={{ fontSize: 11.5 }}>
             {/* hobli names are English-only upstream, so the Kannada anchor is the taluk */}
             {place?.taluk_kn ? <span className="kn" style={{ fontWeight: 600 }}>{place.taluk_kn} </span> : null}
@@ -83,15 +91,19 @@ export default function Today() {
               <div className="body-kn" style={{ marginTop: 16, color: "var(--ink2)" }}>
                 {tpl("tenYears", lang, ten)}
               </div>
+              <div className="gloss" style={{ marginTop: 4 }}>
+                {tpl("tenYears", "en", ten)}
+              </div>
               <div style={{ marginTop: 9 }}>
-                <Decade n={ten} size="sm" tone={v.level === "high" ? "-risk" : ""} label={`${ten} of 10 similar years had a week without rain`} />
+                <Decade n={ten} size="sm" tone={v.level === "high" ? "-risk" : ""}
+                  label={`${ten} of 10 similar years had a week without rain`} />
               </div>
 
               <div style={{ marginTop: 18 }}>
                 <Speak text={spoken} lang={lang} />
               </div>
 
-              <VoiceAssistant lang={lang} areaId={areaId} />
+              <VoiceAssistant lang={lang} areaId={areaId} pageDescription={spoken} />
             </div>
           </div>
 
@@ -116,12 +128,14 @@ export default function Today() {
                 <div style={{ paddingTop: 16, paddingBottom: 18 }}>
                   <div className={`notice -${state.tone}`}>
                     {/* The contract carries advisory text in Kannada and English only.
-                        A Hindi or Telugu reader gets English here until the rules
-                        engine emits their language — never a script they can't read. */}
+                        Keep the localized verdict as the primary message for Hindi
+                        and Telugu, with the source advisory as the English gloss. */}
                     <div className="body-kn" style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.45 }}>
-                      {lang === "kn" ? adv.action_kn : adv.action_en}
+                      {lang === "kn" ? adv.action_kn : pick(state.act, lang)}
                     </div>
-                    {lang === "kn" ? <div className="gloss" style={{ marginTop: 4, fontSize: 13 }}>{adv.action_en}</div> : null}
+                    <div className="gloss" style={{ marginTop: 4, fontSize: 13 }}>
+                      {lang === "kn" ? adv.action_en : lang === "en" ? adv.action_en : `${adv.action_en} · ${pick(state.act, "en")}`}
+                    </div>
                   </div>
                   <div style={{ display: "flex", gap: 9, marginTop: 14, alignItems: "flex-start" }}>
                     <Tick size={17} />

@@ -10,6 +10,7 @@ import Tabs from "../components/Tabs.jsx";
 import { Shell, Msg, Rubric } from "../components/Frame.jsx";
 import { Back } from "../components/Marks.jsx";
 import LangSwitch from "../components/LangSwitch.jsx";
+import VoiceAssistant from "../components/VoiceAssistant.jsx";
 
 export default function Why() {
   const nav = useNavigate();
@@ -56,6 +57,9 @@ export default function Why() {
             <h1 className="kn" style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.22, margin: "6px 0 0" }}>
               {tpl("tenYearsHead", lang, ten)}
             </h1>
+            <div className="gloss" style={{ marginTop: 5 }}>
+              {tpl("tenYearsHead", "en", ten)}
+            </div>
             <div style={{ marginTop: 16 }}>
               <Decade n={ten} size="lg" tone="-risk" label={`${ten} of 10 similar years had a week-long dry spell`} />
             </div>
@@ -67,6 +71,8 @@ export default function Why() {
                 <span style={{ width: 11, height: 11, background: "var(--rule)" }} /> rain continued
               </span>
             </div>
+
+            <VoiceAssistant lang={lang} pageDescription={spoken} />
 
             {/* A figure, captioned like a figure in a printed report. */}
             <figure style={{ margin: "26px 0 0" }}>

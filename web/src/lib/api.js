@@ -11,6 +11,15 @@ export const getLatest = () => json("/forecast/latest.json");
 
 export const LEADS = ["w1", "w2", "w3", "w4"];
 
+/** Display the actual forecast window rather than a hardcoded +1/+2 label. */
+export function dateRangeLabel(range, locale = "en-IN") {
+  if (!range?.start || !range?.end) return "";
+  const opts = { day: "numeric", month: "short" };
+  const start = new Date(`${range.start}T00:00:00`).toLocaleDateString(locale, opts);
+  const end = new Date(`${range.end}T00:00:00`).toLocaleDateString(locale, opts);
+  return `${start} – ${end}`;
+}
+
 /** Leads we are allowed to advise on. Past this the contract only permits "outlook".
  *  0 when skill is missing — treat nothing as advisable rather than guess a week
  *  count that was last true under a retired backend and is silently stale today. */

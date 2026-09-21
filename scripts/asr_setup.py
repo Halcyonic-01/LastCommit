@@ -1,4 +1,4 @@
-"""Download and verify IndicConformer ASR for all four languages.
+"""Download and verify IndicConformer ASR for the supported languages.
 
     .venv/bin/python scripts/asr_setup.py
 
@@ -19,7 +19,6 @@ TEST_PHRASES = {
     "kn": "ಮಳೆ ಬಂತು",
     "hi": "बारिश हुई",
     "te": "వర్షం పడింది",
-    "en": "it rained today",
 }
 
 
@@ -62,7 +61,8 @@ def main():
 
     results = {}
     print("Testing transcription pipeline (tone audio — expect garbage output, just checking no crash):")
-    for lang in ["kn", "hi", "te", "en"]:
+    # The IndicConformer checkpoint does not contain an English vocabulary.
+    for lang in ["kn", "hi", "te"]:
         try:
             tone = np.sin(2 * np.pi * 440 * np.linspace(0, 1, 16000)).astype("float32")
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:

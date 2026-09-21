@@ -1,5 +1,5 @@
-import { LEADS, outOfTen } from "../lib/api.js";
-import { karteFor, t } from "../i18n/strings.js";
+import { LEADS, dateRangeLabel, outOfTen } from "../lib/api.js";
+import { karteFor } from "../i18n/strings.js";
 
 /** Four weeks left to right. Confidence is rendered, not labelled: the ink
  *  fades, the fill breaks into hatching and the baseline turns dashed once we
@@ -12,12 +12,15 @@ export default function Ribbon({ forecast, meta, horizon, lang = "kn" }) {
         const out = i >= horizon;
         const kt = karteFor(meta?.lead_dates?.[k]?.start ?? "");
         const start = meta?.lead_dates?.[k]?.start;
+        const dateRange = dateRangeLabel(meta?.lead_dates?.[k]);
         return (
-          <div key={k} className={`wk${out ? " -outlook" : ""}`} style={{ opacity: 1 - i * 0.17 }}>
-            <div className="rubric" style={{ fontSize: 9.5 }}>{i === 0 ? t("today", lang) : `+${i}`}</div>
+          <div key={k} className={`wk${out ? " -outlook" : ""}`} style={{ opacity: 1 - i * 0.17 }}
+            data-lead={k} data-probability={p}>
+            <div className="rubric" style={{ fontSize: 9.5 }}>{dateRange || k.toUpperCase()}</div>
             <div className="kn" style={{ fontSize: 15, fontWeight: 700, lineHeight: 1.2, marginTop: 1 }}>
               {kt ? kt[lang] ?? kt.en : `W${i + 1}`}
             </div>
+            {kt && lang !== "en" ? <div className="gloss" style={{ fontSize: 10 }}>{kt.en}</div> : null}
             <div className="bar" style={{ marginTop: 6 }}>
               <span style={{ height: `${Math.max(6, p * 100)}%` }} />
             </div>

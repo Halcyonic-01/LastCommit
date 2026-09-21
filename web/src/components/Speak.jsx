@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { speak, canSpeak, pauseSpeech, resumeSpeech, isParlerAvailable, checkParlerAvailable } from "../lib/speech.js";
+import { speak, preloadSpeech, canSpeak, pauseSpeech, resumeSpeech, stopSpeech, isParlerAvailable, checkParlerAvailable } from "../lib/speech.js";
 import { Speaker, Pause, Play } from "./Marks.jsx";
 import { t } from "../i18n/strings.js";
 
@@ -11,7 +11,15 @@ export default function Speak({ text, lang = "kn", variant = "pill", onPhoto = f
   // Re-check once the async health probe resolves on page load.
   useEffect(() => {
     checkParlerAvailable().then((ok) => setHd(ok)).catch(() => {});
-  }, []);
+    // Generate the selected language in the background so tapping Listen does
+    // not have to wait for the neural synthesizer on the critical path.
+    const timer = setTimeout(() => preloadSpeech(text, lang), 80);
+    // A language switch must stop any audio generated for the previous text.
+    return () => {
+      clearTimeout(timer);
+      stopSpeech();
+    };
+  }, [text, lang]);
 
   if (!canSpeak() || !text) return null;
   const cls = onPhoto ? " -onphoto" : "";

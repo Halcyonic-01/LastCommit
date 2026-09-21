@@ -61,7 +61,10 @@ def main():
     print(f"Using device: {device}")
 
     model = ParlerTTSForConditionalGeneration.from_pretrained(MODEL_ID).to(device)
+    # Parler-TTS requires separate tokenizers for the voice description and
+    # the text that will actually be spoken.
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
+    description_tokenizer = AutoTokenizer.from_pretrained(model.config.text_encoder._name_or_path)
     sample_rate = model.config.sampling_rate
     print(f"Model loaded. Sample rate: {sample_rate} Hz\n")
 
@@ -69,10 +72,15 @@ def main():
     for lang, text in TEST_TEXT.items():
         print(f"[{lang}] Synthesising: {text[:60]}...")
         try:
-            desc_ids = tokenizer(VOICE[lang], return_tensors="pt").input_ids.to(device)
-            text_ids = tokenizer(text, return_tensors="pt").input_ids.to(device)
+            desc = description_tokenizer(VOICE[lang], return_tensors="pt").to(device)
+            spoken = tokenizer(text, return_tensors="pt").to(device)
             with torch.no_grad():
-                gen = model.generate(input_ids=desc_ids, prompt_input_ids=text_ids)
+                gen = model.generate(
+                    input_ids=desc.input_ids,
+                    attention_mask=desc.attention_mask,
+                    prompt_input_ids=spoken.input_ids,
+                    prompt_attention_mask=spoken.attention_mask,
+                )
             audio = gen.cpu().numpy().squeeze()
             out = AUDIO_DIR / f"test_{lang}.wav"
             sf.write(str(out), audio, sample_rate)
