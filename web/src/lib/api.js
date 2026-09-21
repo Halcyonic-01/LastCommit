@@ -11,8 +11,10 @@ export const getLatest = () => json("/forecast/latest.json");
 
 export const LEADS = ["w1", "w2", "w3", "w4"];
 
-/** Leads we are allowed to advise on. Past this the contract only permits "outlook". */
-export const advisoryHorizon = (skill) => skill?.advisory_horizon_weeks ?? 2;
+/** Leads we are allowed to advise on. Past this the contract only permits "outlook".
+ *  0 when skill is missing — treat nothing as advisable rather than guess a week
+ *  count that was last true under a retired backend and is silently stale today. */
+export const advisoryHorizon = (skill) => skill?.advisory_horizon_weeks ?? 0;
 
 /** Highest dry-spell risk inside the advisory horizon — this drives the one decision. */
 export function verdict(forecast, skill) {

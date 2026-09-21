@@ -98,7 +98,7 @@ export default function Verify() {
                   <div className="ops-mono" style={{ width: 54, textAlign: "right", fontWeight: 700, color: neg ? "var(--risk)" : "var(--ok)" }}>
                     {v > 0 ? "+" : ""}{v.toFixed(2)}
                   </div>
-                  <div className="kn" style={{ width: 128, fontSize: 12.5, color: "var(--ink2)", textAlign: "right" }}>{w.kn}</div>
+                  <div style={{ width: 160, fontSize: 12.5, color: "var(--ink2)", textAlign: "right" }}>{w.en}</div>
                 </div>
               );
             })}
@@ -106,7 +106,7 @@ export default function Verify() {
           <div style={{ marginTop: 18, borderLeft: "3px solid var(--wait)", paddingLeft: 12, fontSize: 13, color: "var(--ink2)", maxWidth: 480 }}>
             The farmer app refuses to give an action past week {horizon}, the last lead whose
             95% interval clears zero. It shows the weeks beyond it
-            as an outlook with a dashed baseline, and says <span className="kn" style={{ color: "var(--ink)" }}>ಅಂದಾಜು</span> out loud.
+            as an outlook with a dashed baseline, and says "outlook only" out loud.
           </div>
         </section>
 
@@ -135,7 +135,7 @@ export default function Verify() {
               [skill?.roc_auc?.toFixed(2) ?? "—", "week-1 ROC-AUC for dry spells. Good, not magic."],
               // seasons SCORED, never seasons trained — the evidence is the held-out set
               [skill?.seasons_scored ? String(skill.seasons_scored) : "—", "independent seasons these numbers were measured on."],
-              [d?.provenance?.nwp?.members ?? "—", "ensemble members blended, weighted down as lead grows."],
+              [d?.provenance?.nwp?.members ?? "—", "ensemble members blended in, weighted most heavily at week 1."],
             ].map(([n, txt]) => (
               <div key={txt} style={{ background: "var(--paper2)", padding: "12px 14px" }}>
                 <div className="ops-mono" style={{ fontSize: 24, fontWeight: 700, lineHeight: 1 }}>{n}</div>

@@ -1,0 +1,51 @@
+{
+ "area_id": "KGIS-T-2803",
+ "name_en": "Gudibande",
+ "district_en": "Chikkaballapura",
+ "forecast_date": "2024-08-20",
+ "forecast": {
+  "dry14": {
+   "pred": 0.1028,
+   "actual": 0.0
+  },
+  "dry7": {
+   "pred": 0.342,
+   "actual": 1.0
+  },
+  "false_onset": {
+   "pred": 0.68,
+   "actual": 1.0
+  },
+  "heavy": {
+   "pred": 0.0404,
+   "actual": 0.0
+  },
+  "onset": {
+   "pred": 0.9651,
+   "actual": 1.0
+  }
+ },
+ "rain_mm": {
+  "2024-08-13": 40.4,
+  "2024-08-14": 2.4,
+  "2024-08-15": 2.5,
+  "2024-08-16": 0.0,
+  "2024-08-17": 31.5,
+  "2024-08-18": 13.3,
+  "2024-08-19": 5.9,
+  "2024-08-20": 47.1,
+  "2024-08-21": 16.0,
+  "2024-08-22": 0.0,
+  "2024-08-23": 0.0,
+  "2024-08-24": 0.0,
+  "2024-08-25": 0.0,
+  "2024-08-26": 0.0,
+  "2024-08-27": 0.0,
+  "2024-08-28": 1.1,
+  "2024-08-29": 1.4,
+  "2024-08-30": 0.4,
+  "2024-08-31": 5.2
+ },
+ "narrative_en": "On 20 Aug 2024, Gudibande had just logged 47mm of rain after a week of wet days -- the model put onset confidence at 97%. But it also flagged a 68% chance this was a false onset, a wet spell about to break. Six dry days followed immediately (22-27 Aug), confirmed by the same real IMD data.",
+ "narrative_kn": "20 ಆಗಸ್ಟ್ 2024 ರಂದು, ಗುಡಿಬಂಡೆಯಲ್ಲಿ ಒಂದು ವಾರದ ಮಳೆಯ ನಂತರ 47mm ಮಳೆ ಬಿದ್ದಿತ್ತು -- ಮಾದರಿಯು ಮುಂಗಾರು ಆರಂಭದ ವಿಶ್ವಾಸವನ್ನು 97% ಎಂದು ಅಂದಾಜಿಸಿತ್ತು. ಆದರೆ ಇದು ಸುಳ್ಳು ಆರಂಭದ 68% ಸಾಧ್ಯತೆಯನ್ನೂ ಸೂಚಿಸಿತ್ತು. ನಿಜವಾಗಿಯೂ ನಂತರ 6 ದಿನಗಳ ಒಣ ಅವಧಿ (22-27 ಆಗಸ್ಟ್) ಕಂಡುಬಂದಿತು."
+}

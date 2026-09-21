@@ -1,7 +1,6 @@
 {
- "as_of": "2026-09-19",
- "generated_at": "2026-09-20T23:17:52.868488+00:00",
- "seconds": 5.6,
+ "as_of": "2026-09-21",
+ "generated_at": "2026-09-21T00:13:11.859892+00:00",
  "n_cells": 324,
  "slots_without_a_model": [],
  "live_feature_coverage": {
@@ -33,7 +32,7 @@
   "p_onset_w4": "blend"
  },
  "nwp_models": [
-  "ec46",
-  "gefs"
- ]
+  "ec46"
+ ],
+ "seconds": 4.7
 }

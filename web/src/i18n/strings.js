@@ -14,6 +14,16 @@ export const S = {
   pickLang:   { kn: "ನಿಮ್ಮ ಭಾಷೆ ಒತ್ತಿ", hi: "अपनी भाषा चुनें", te: "మీ భాష ఎంచుకోండి", en: "Tap your language" },
   pickPlace:  { kn: "ನಿಮ್ಮ ಹೋಬಳಿ", hi: "आपका होबली", te: "మీ హోబళి", en: "Your hobli" },
   start:      { kn: "ಶುರು ಮಾಡಿ", hi: "शुरू करें", te: "ప్రారంభించండి", en: "Start" },
+
+  // Only field on this screen that leaves the phone — say so plainly, right next to
+  // "your choice stays on this phone" above it, not folded into the same promise.
+  phone:        { kn: "ಫೋನ್ ಸಂಖ್ಯೆ", hi: "फ़ोन नंबर", te: "ఫోన్ నంబర్", en: "Phone number" },
+  phoneOptional:{ kn: "ಐಚ್ಛಿಕ", hi: "वैकल्पिक", te: "ఐచ్ఛికం", en: "optional" },
+  // One sentence, not two — the first draft said "we'll message you" and "this leaves
+  // your phone" as separate lines, which just restated the same fact twice.
+  phoneNote:    { kn: "ಮೇಲಿನವುಗಳಂತಲ್ಲ, ಇದು ಈ ಫೋನ್ ಬಿಟ್ಟು ಹೋಗುತ್ತದೆ — WhatsApp ಅಥವಾ SMS ಮೂಲಕ ಸಂದೇಶ ಕಳುಹಿಸಲು.", hi: "ऊपर वालों के विपरीत, यह इस फ़ोन से बाहर जाता है — ताकि हम WhatsApp या SMS पर संदेश भेज सकें।", te: "పైవాటిలా కాకుండా, ఇది ఈ ఫోన్ నుండి బయటకు వెళుతుంది — WhatsApp లేదా SMS ద్వారా సందేశం పంపడానికి.", en: "Unlike your choices above, this leaves the phone — so we can message you on WhatsApp or SMS." },
+  phoneSaved:   { kn: "ಉಳಿಸಲಾಗಿದೆ — ಈ ಸಂಖ್ಯೆಗೆ ಸಂದೇಶ ಕಳುಹಿಸುತ್ತೇವೆ", hi: "सहेजा गया — इस नंबर पर संदेश भेजेंगे", te: "సేవ్ చేయబడింది — ఈ నంబర్‌కు సందేశం పంపుతాము", en: "Saved — we'll message this number" },
+  phoneFailed:  { kn: "ಉಳಿಸಲು ಆಗಲಿಲ್ಲ — ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", hi: "सहेज नहीं सके — बाद में फिर कोशिश करें", te: "సేవ్ చేయలేకపోయాము — తర్వాత మళ్ళీ ప్రయత్నించండి", en: "Could not save — try again later" },
   listen:     { kn: "ಕೇಳಿ", hi: "सुनें", te: "వినండి", en: "Listen" },
   back:       { kn: "ಹಿಂದೆ", hi: "पीछे", te: "వెనుకకు", en: "Back" },
 
@@ -118,17 +128,34 @@ export const TPL = {
     te: (n) => `ఇలాంటి 10 సంవత్సరాలలో ${n} సంవత్సరాలు వర్షం ఒక వారం ఆగింది`,
     en: (n) => `In ${n} of 10 years like this one, the rain stopped for a week`,
   },
+  // Was hardcoded to exactly two outlook weeks (h+1, h+2) -- true only when horizon
+  // happened to be 2. At the real horizon of 1, weeks 2, 3 AND 4 are outlook, and the
+  // old sentence could not say a third number, so it silently dropped week 4. Rewritten
+  // to a boundary statement that is correct for any horizon from 0 to 4.
   outlookNote: {
-    kn: (h) => `ಅದಕ್ಕೇ ಈ ಆ್ಯಪ್ ${h + 1} ಮತ್ತು ${h + 2}ನೇ ವಾರಕ್ಕೆ ಏನು ಮಾಡಬೇಕೆಂದು ಹೇಳುವುದಿಲ್ಲ. ಅಂದಾಜು ಎಂದಷ್ಟೇ ಹೇಳುತ್ತದೆ.`,
-    hi: (h) => `इसीलिए यह ऐप हफ़्ते ${h + 1} और ${h + 2} के लिए कोई सलाह नहीं देता। सिर्फ़ अनुमान कहता है।`,
-    te: (h) => `అందుకే ఈ యాప్ ${h + 1}, ${h + 2} వారాలకు ఏమి చేయాలో చెప్పదు. అంచనా మాత్రమే అని చెబుతుంది.`,
-    en: (h) => `That is why this app gives no action for weeks ${h + 1} and ${h + 2}. It only says outlook.`,
+    kn: (h) => h > 0
+      ? `ಈ ಆ್ಯಪ್ ${h}ನೇ ವಾರದವರೆಗೆ ಮಾತ್ರ ಏನು ಮಾಡಬೇಕೆಂದು ಹೇಳುತ್ತದೆ. ಅದರ ನಂತರ ಅಂದಾಜು ಮಾತ್ರ.`
+      : `ಈಗ ಯಾವ ವಾರಕ್ಕೂ ಏನು ಮಾಡಬೇಕೆಂದು ಹೇಳಲಾಗುವುದಿಲ್ಲ. ಎಲ್ಲವೂ ಅಂದಾಜು ಮಾತ್ರ.`,
+    hi: (h) => h > 0
+      ? `इसीलिए यह ऐप सिर्फ़ हफ़्ते ${h} तक की सलाह देता है। उसके बाद सिर्फ़ अनुमान है।`
+      : `अभी किसी भी हफ़्ते के लिए सलाह नहीं दी जा सकती। सब कुछ सिर्फ़ अनुमान है।`,
+    te: (h) => h > 0
+      ? `అందుకే ఈ యాప్ ${h}వ వారం వరకు మాత్రమే సలహా ఇస్తుంది. తర్వాత అంచనా మాత్రమే.`
+      : `ఇప్పుడు ఏ వారానికీ సలహా ఇవ్వలేము. అంతా అంచనా మాత్రమే.`,
+    en: (h) => h > 0
+      ? `That is why this app only gives action through week ${h}. Anything after that is outlook only.`
+      : `This app cannot give action for any week right now. Everything shown is outlook only.`,
   },
+  // Used to end with a fixed "trust this week and next" — true only when the
+  // advisory horizon happened to be 2. It's immediately followed by outlookNote,
+  // which already states the real (now 1-week) horizon correctly, so the two
+  // sentences read aloud contradicted each other. Cut rather than parametrized:
+  // outlookNote already owns that claim, and this template shouldn't duplicate it.
   whySpoken: {
-    kn: (y, n) => `ಕಳೆದ ${y} ವರ್ಷಗಳ ಮಳೆ ದಾಖಲೆಯನ್ನು ಇಂದಿನ ಸ್ಥಿತಿಯ ಜೊತೆ ಹೋಲಿಸಿದ್ದೇವೆ. ಹತ್ತರಲ್ಲಿ ${n} ವರ್ಷ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು. ಈ ವಾರ ಮತ್ತು ಮುಂದಿನ ವಾರ ನಂಬಬಹುದು.`,
-    hi: (y, n) => `हमने ${y} सालों का बारिश का रिकॉर्ड आज की स्थिति से मिलाया। दस में से ${n} साल एक हफ़्ते बारिश रुकी थी। इस हफ़्ते और अगले हफ़्ते पर भरोसा करें।`,
-    te: (y, n) => `మేము ${y} సంవత్సరాల వర్ష రికార్డును నేటి పరిస్థితితో పోల్చాము. పదిలో ${n} సంవత్సరాలు ఒక వారం వర్షం ఆగింది. ఈ వారం, వచ్చే వారం నమ్మవచ్చు.`,
-    en: (y, n) => `We compared ${y} years of rainfall records with today's conditions. In ${n} of 10 similar years the rain stopped for a week. Trust this week and next.`,
+    kn: (y, n) => `ಕಳೆದ ${y} ವರ್ಷಗಳ ಮಳೆ ದಾಖಲೆಯನ್ನು ಇಂದಿನ ಸ್ಥಿತಿಯ ಜೊತೆ ಹೋಲಿಸಿದ್ದೇವೆ. ಹತ್ತರಲ್ಲಿ ${n} ವರ್ಷ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು.`,
+    hi: (y, n) => `हमने ${y} सालों का बारिश का रिकॉर्ड आज की स्थिति से मिलाया। दस में से ${n} साल एक हफ़्ते बारिश रुकी थी।`,
+    te: (y, n) => `మేము ${y} సంవత్సరాల వర్ష రికార్డును నేటి పరిస్థితితో పోల్చాము. పదిలో ${n} సంవత్సరాలు ఒక వారం వర్షం ఆగింది.`,
+    en: (y, n) => `We compared ${y} years of rainfall records with today's conditions. In ${n} of 10 similar years the rain stopped for a week.`,
   },
 };
 
