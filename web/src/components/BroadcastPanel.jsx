@@ -42,7 +42,7 @@ export default function BroadcastPanel({ areaIds, areaNames, event, lead, onClos
       });
       const body = await r.json();
       setResult(r.ok ? { ok: true, ...body } : { ok: false, error: body.error || `HTTP ${r.status}` });
-      if (r.ok && body.sent > 0) onSent?.();
+      if (r.ok) onSent?.(body);
     } catch {
       setResult({ ok: false, error: "could not reach the broadcast server" });
     } finally {

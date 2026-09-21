@@ -5,6 +5,7 @@ import { karteFor } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
 import HazardMap, { DRY, WATER } from "../components/HazardMap.jsx";
 import BroadcastPanel from "../components/BroadcastPanel.jsx";
+import Toast from "../components/Toast.jsx";
 import { BROADCAST_API } from "../lib/officer.js";
 
 const REPORT_WINDOW_DAYS = 14;  // ground truth this recent is still worth showing an officer
@@ -27,6 +28,7 @@ export default function Officer() {
   const [reviewing, setReviewing] = useState(false);
   const [reports, setReports] = useState([]);
   const [subCounts, setSubCounts] = useState({});
+  const [toast, setToast] = useState(null);
 
   const H = HAZARDS.find((h) => h.key === hazard);
 
@@ -231,9 +233,19 @@ export default function Officer() {
           event={hazard}
           lead={LEADS[lead]}
           onClose={() => setReviewing(false)}
-          onSent={() => { setQueued([]); setReviewing(false); }}
+          onSent={(r) => {
+            const n = r?.sent ?? 0;
+            // Report what happened, not that a button was pressed: a send that reached
+            // nobody looks identical to a success unless the count is on screen.
+            setToast(n > 0
+              ? { tone: "ok", message: `Sent to ${n} destination${n === 1 ? "" : "s"}. Farmers see it on their Messages screen.` }
+              : { tone: "wait", message: `Nothing was delivered${r?.failed ? ` — ${r.failed} failed` : ""}. Check the panel for the reason.` });
+            if (n > 0) { setQueued([]); setReviewing(false); }
+          }}
         />
       ) : null}
+
+      <Toast message={toast?.message} tone={toast?.tone} onDone={() => setToast(null)} />
 
       {err ? <div style={{ padding: 16, color: "var(--risk)" }}>Could not load forecast: {err}</div> : null}
       <style>{`@media (min-width: 1040px){ .ops-grid { grid-template-columns: minmax(0,1.25fr) minmax(0,1fr) !important; } }`}</style>
