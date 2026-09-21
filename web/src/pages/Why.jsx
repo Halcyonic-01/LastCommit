@@ -9,6 +9,7 @@ import Decade from "../components/Decade.jsx";
 import Tabs from "../components/Tabs.jsx";
 import { Shell, Msg, Rubric } from "../components/Frame.jsx";
 import { Back } from "../components/Marks.jsx";
+import LangSwitch from "../components/LangSwitch.jsx";
 
 export default function Why() {
   const nav = useNavigate();
@@ -44,6 +45,7 @@ export default function Why() {
           <div className="gloss">{S.whyTitle.en}</div>
         </div>
         <Speak text={spoken} lang={lang} variant="icon" />
+        <LangSwitch lang={lang} />
       </div>
 
       <div className="grow">

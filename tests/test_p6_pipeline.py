@@ -222,6 +222,19 @@ def test_the_output_validates_against_the_frozen_contract():
     c.load_and_validate(p, "forecast.schema.json")
 
 
+def test_latest_json_stays_inside_its_own_documented_budget():
+    """P1 pinned <1.5 MB for latest.json at full scale — checked there only against a
+    mock. The real file has no equivalent, and richer P8 advisories (up to 3 per area,
+    every stage now genuinely reachable) grow it for real: 1.44 MB the day this was
+    added, up from ~0.7 MB before the rules engine covered every stage. Caught here so
+    the next rule added is weighed against the real budget, not just the mock's."""
+    p = FORECAST / "latest.json"
+    if not p.exists():
+        pytest.skip("run scripts/nightly.py")
+    mb = p.stat().st_size / 1_048_576
+    assert mb < 1.5, f"{mb:.2f} MB — over the documented latest.json budget"
+
+
 def test_every_published_probability_is_strictly_inside_the_unit_interval(latest):
     bad = []
     for aid, a in latest["areas"].items():

@@ -94,6 +94,48 @@ def test_a_rule_referencing_an_unknown_fact_fails_loudly(packs):
         r.matches(E.facts_from(area(0.3)), "ragi", "pre_sowing")
 
 
+# --- P8: every district's CRIDA rules, not just the statewide default ------
+
+
+def _cond_value(expr: str) -> float:
+    """A number that satisfies one `<op> <number>` condition, with a small margin."""
+    op, num = re.match(r"\s*(>=|<=|==|!=|>|<)\s*(-?\d+(?:\.\d+)?)\s*$", expr).groups()
+    num = float(num)
+    return {">=": num + 0.001, ">": num + 0.001, "<=": num - 0.001, "<": num - 0.001,
+            "==": num, "!=": num + 1}[op]
+
+
+def _facts_satisfying(rule: E.Rule) -> dict:
+    """Every published fact, defaulted low, then overridden so this rule's own
+    `when` clause is genuinely true — not a value the test happens to pick."""
+    facts = {k: 0.05 for k in (
+        "p_onset_w1", "p_false_onset_w1", "p_dry7_w1", "p_dry14_w1", "p_heavy_w1",
+        "p_dry7_w1_max", "onset_delay_weeks",
+    )}
+    for key, expr in rule.when.items():
+        exprs = expr if isinstance(expr, list) else [expr]
+        if len(exprs) == 2:
+            lo, hi = _cond_value(exprs[0]), float(re.search(r"-?\d+(?:\.\d+)?", exprs[1]).group())
+            facts[key] = (lo + hi) / 2
+        else:
+            facts[key] = _cond_value(exprs[0])
+    return facts
+
+
+@pytest.mark.parametrize("district", sorted(E.load_rules().keys()))
+def test_every_rule_in_every_district_fires_on_its_own_scenario(district, packs):
+    """P8: 'every rule fires on its scenario and cites a real CRIDA table' — checked
+    against every district file on disk, not just the statewide default."""
+    for rule in packs[district]:
+        crop = rule.crop if rule.crop != "any" else "ragi"
+        stages = rule.stage if isinstance(rule.stage, list) else [rule.stage]
+        stage = stages[0] if stages[0] != "any" else "pre_sowing"
+        facts = _facts_satisfying(rule)
+        assert rule.matches(facts, crop, stage), f"{district}/{rule.id} does not match its own when-clause"
+        assert rule.table.strip(), f"{district}/{rule.id} has no table citation"
+        assert rule.action_kn.strip() and rule.action_en.strip(), f"{district}/{rule.id} missing a language"
+
+
 def test_range_conditions_need_both_bounds(packs):
     """`[">= 0.30", "< 0.45"]` must exclude both sides, not just one."""
     rules = {r.id: r for r in packs[""]}
@@ -101,6 +143,61 @@ def test_range_conditions_need_both_bounds(packs):
     assert delay.matches(E.facts_from(area(0.35)), "ragi", "pre_sowing")
     assert not delay.matches(E.facts_from(area(0.20)), "ragi", "pre_sowing")
     assert not delay.matches(E.facts_from(area(0.60)), "ragi", "pre_sowing")
+
+
+# --- P8: stage derivation, per-probability confidence words -----------------
+
+
+def test_crop_stage_before_the_delayed_sowing_date_is_pre_sowing():
+    from datetime import date as d
+
+    assert E.crop_stage(d(2026, 6, 1), onset_delay_weeks=2.0) == "pre_sowing"
+
+
+def test_crop_stage_progresses_with_weeks_since_the_real_sowing_date():
+    from datetime import date as d
+
+    # onset_delay_weeks=0 -> sowing anchored at 1 June (doy 152)
+    assert E.crop_stage(d(2026, 6, 2), onset_delay_weeks=0.0) == "sowing"
+    assert E.crop_stage(d(2026, 6, 20), onset_delay_weeks=0.0) == "vegetative"
+    assert E.crop_stage(d(2026, 7, 25), onset_delay_weeks=0.0) == "flowering"
+    assert E.crop_stage(d(2026, 9, 1), onset_delay_weeks=0.0) == "maturity"
+
+
+def test_crop_stage_shifts_with_a_real_onset_delay():
+    """A 4-week-late onset pushes every later stage boundary back by the same 4 weeks."""
+    from datetime import date as d
+
+    on_time = E.crop_stage(d(2026, 6, 20), onset_delay_weeks=0.0)
+    same_point_when_late = E.crop_stage(d(2026, 6, 20), onset_delay_weeks=4.0)
+    assert on_time == "vegetative"
+    assert same_point_when_late == "pre_sowing", "sowing itself hasn't happened yet at this delay"
+
+
+def test_confidence_word_scales_with_the_matched_probability():
+    assert E.confidence_word(0.80) == ("very likely", "ಬಹುತೇಕ ಖಚಿತ")
+    assert E.confidence_word(0.50) == ("likely", "ಸಾಧ್ಯತೆ ಇದೆ")
+    assert E.confidence_word(0.10) == ("possible", "ಸ್ವಲ್ಪ ಸಾಧ್ಯತೆ")
+
+
+def test_evaluate_reports_the_real_driving_probability_not_a_fixed_word(packs):
+    weak = area(0.31)  # just clears the 0.30 delay threshold
+    strong = area(0.80)  # far past the 0.45 switch-crop threshold
+    weak_adv = [a for a in E.evaluate(weak, packs=packs) if a["rule_id"] == "dryspell.presowing.delay"][0]
+    strong_adv = [a for a in E.evaluate(strong, packs=packs) if a["rule_id"] == "dryspell.presowing.switch_crop"][0]
+    assert weak_adv["confidence_word_en"] == "possible"
+    assert strong_adv["confidence_word_en"] == "very likely"
+
+
+def test_midseason_rules_only_fire_at_their_own_stage(packs):
+    """A dry14 spike at the default pre_sowing stage must not trigger vegetative/flowering advice."""
+    a = area(0.10)
+    a["p_dry14"] = {"w1": 0.80, "w2": 0.80, "w3": 0.80, "w4": 0.80}
+    ids = [x["rule_id"] for x in E.evaluate(a, packs=packs)]
+    assert "midseason.vegetative" not in ids and "midseason.flowering" not in ids
+
+    ids_veg = [x["rule_id"] for x in E.evaluate(a, stage="vegetative", packs=packs)]
+    assert "midseason.vegetative" in ids_veg
 
 
 # --- rule output still satisfies the frozen contract -----------------------
@@ -135,11 +232,16 @@ def test_rule_coverage_is_not_one_rule_for_everything():
 
 
 def test_telegram_message_carries_the_decision_and_its_source():
+    """Checked against whichever advisory is actually live for this area today, not a
+    hardcoded word — the demo area's real top advisory changes as the season and the
+    real onset-delay-derived crop stage progress (P8: stage now varies for real)."""
     sys.path.insert(0, str(ROOT / "services" / "telegram"))
     import send  # noqa: PLC0415
 
-    text = send.compose(FORECAST / "area" / "KGIS-H-180901.json")
-    assert "ಬಿತ್ತನೆ" in text, "no Kannada sowing instruction"
+    area_file = FORECAST / "area" / "KGIS-H-180901.json"
+    text = send.compose(area_file)
+    adv = json.loads(area_file.read_text())["forecast"]["advisories"][0]
+    assert adv["action_kn"] in text, "the real live advisory's own action text is missing"
     assert "CRIDA" in text, "no citation"
     assert "ಅಂದಾಜು" in text, "weeks 3-4 must be marked as outlook"
     assert "%" in text

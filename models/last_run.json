@@ -1,6 +1,6 @@
 {
  "as_of": "2026-09-21",
- "generated_at": "2026-09-21T00:13:11.859892+00:00",
+ "generated_at": "2026-09-21T09:09:06.687975+00:00",
  "n_cells": 324,
  "slots_without_a_model": [],
  "live_feature_coverage": {
@@ -34,5 +34,5 @@
  "nwp_models": [
   "ec46"
  ],
- "seconds": 4.7
+ "seconds": 5.1
 }

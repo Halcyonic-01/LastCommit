@@ -1,0 +1,180 @@
+# Chitradurga — rainfed groundnut (dominant) and finger millet (ragi) on red soils,
+# maize and sunflower on black soils, per the district's own CRIDA plan
+# (data/raw/crida/KA_Chitradurga.pdf). The engine has no soil-type fact, so rules below
+# are keyed on crop alone (groundnut/ragi = the plan's red-soil rows, maize/sunflower =
+# its black-soil rows — see report). Kharif-rainfed sowing (1.12): groundnut end-May to
+# end-July, maize/sunflower June 1st week to July, ragi July 2nd week to August 1st week.
+district: Chitradurga
+source_doc: ICAR-CRIDA Chitradurga district agriculture contingency plan
+rules:
+  # --- 2.1.1 early season drought (delayed onset): groundnut is "No change" through
+  #     6 weeks in this district's own table — it only escalates at 8 weeks. That's a
+  #     real district-specific fact, not a match for the statewide default's 4/6-week
+  #     variety-switch advice, so it's overridden here rather than skipped. ---
+  - id: onsetdelay.4wk
+    crop: groundnut
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 3", "< 5"]
+    action_kn: ಶೇಂಗಾಗೆ ಬದಲಾವಣೆ ಬೇಡ, ಮುಂದುವರಿಸಿ — ಆಳವಾಗಿ ಉಳುಮೆ ಮಾಡಿ, ಬದು ಹಾಕಿ ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಿ
+    action_en: No change needed for groundnut — continue as sown; keep up deep ploughing and ridges/furrows to hold soil moisture
+    reason_kn: ಶೇಂಗಾ ನಾಲ್ಕು ವಾರ ತಡವಾದರೂ ತಡೆದುಕೊಳ್ಳುತ್ತದೆ
+    reason_en: Groundnut in this district tolerates onset delay up to four weeks without switching crop or variety
+
+  - id: onsetdelay.6wk
+    crop: groundnut
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 5", "< 7"]
+    action_kn: ಶೇಂಗಾಗೆ ಇನ್ನೂ ಬದಲಾವಣೆ ಬೇಡ — ಮಣ್ಣಿನ ತೇವ ಉಳಿಸುತ್ತಾ ಮುಂದುವರಿಸಿ
+    action_en: Still no change for groundnut — continue as planned and keep conserving soil moisture
+    reason_kn: ಶೇಂಗಾ ಆರು ವಾರ ತಡವಾದರೂ ತಡೆದುಕೊಳ್ಳುತ್ತದೆ
+    reason_en: Groundnut in this district tolerates onset delay up to six weeks without switching crop or variety
+
+  - id: onsetdelay.8wk
+    crop: groundnut
+    stage: pre_sowing
+    severity: critical
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: ">= 7"
+    action_kn: ಶೇಂಗಾ ಬದಲು ನವಣೆ ಬಿತ್ತನೆ ಮಾಡಿ (ಔಡಲ ಜೊತೆ ಇದ್ದರೆ ರಾಗಿ, ತೊಗರಿ ಜೊತೆ ಇದ್ದರೆ ಹುರುಳಿ)
+    action_en: Switch groundnut to foxtail millet (finger millet if it was intercropped with castor, horse gram if with pigeon pea)
+    reason_kn: ಮುಂಗಾರು ಎಂಟು ವಾರಕ್ಕಿಂತ ಹೆಚ್ಚು ತಡವಾಗಿದೆ — ಶೇಂಗಾ ಬೆಳೆಯಲು ಸಮಯ ಸಾಲದು
+    reason_en: Monsoon onset is more than eight weeks late — groundnut will not mature in time
+
+  # --- same table's black-soil rows: maize and sunflower both get a pigeon-pea
+  #     intercrop already at the 2-week tier (with named varieties) — real, more
+  #     proactive than the statewide default's 2-week "no action" framing. Later tiers
+  #     for these two crops repeat the same intercrop or say "No change", so they're
+  #     not restated here. ---
+  - id: onsetdelay.2wk.maize
+    crop: maize
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 1", "< 3"]
+    action_kn: ಮೆಕ್ಕೆಜೋಳ ಜೊತೆ ತೊಗರಿ 90x30 ಸೆಂ.ಮೀ ಅಂತರದಲ್ಲಿ ಮಿಶ್ರ ಬೆಳೆ ಮಾಡಿ (ಮೆಕ್ಕೆಜೋಳಕ್ಕೆ NAH-2049 ಅಥವಾ NAC-6004, ತೊಗರಿಗೆ TTB-7 ಅಥವಾ BRG-1)
+    action_en: Intercrop maize with pigeon pea at 90x30cm spacing (maize NAH-2049, NAH-1137 or NAC-6004/6002; pigeon pea TTB-7 or BRG-1/2)
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ಎರಡು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about two weeks late — intercropping now spreads the risk
+
+  - id: onsetdelay.2wk.sunflower
+    crop: sunflower
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 1", "< 3"]
+    action_kn: ಸೂರ್ಯಕಾಂತಿ ಜೊತೆ ತೊಗರಿ 90x30 ಸೆಂ.ಮೀ ಅಂತರದಲ್ಲಿ ಮಿಶ್ರ ಬೆಳೆ ಮಾಡಿ (ಸೂರ್ಯಕಾಂತಿಗೆ KBSH-1, ತೊಗರಿಗೆ TTB-7 ಅಥವಾ BRG-1)
+    action_en: Intercrop sunflower with pigeon pea at 90x30cm spacing (sunflower KBSH-1/41/42/44/53; pigeon pea TTB-7 or BRG-1/2)
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ಎರಡು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about two weeks late — intercropping now spreads the risk
+
+  # --- finger millet (ragi) rows of the same table: real agronomic detail at 4 and
+  #     6 weeks, distinct from groundnut's "no change" story above ---
+  - id: onsetdelay.4wk.ragi
+    crop: ragi
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 3", "< 5"]
+    action_kn: ಮಳೆ ಬರುವ 8-10 ದಿನ ಮೊದಲೇ ರಾಗಿ ಒಣ ಬಿತ್ತನೆ ಮಾಡಿ, ಶೇ.15-20 ಹೆಚ್ಚು ಬೀಜ ಬಳಸಿ; ಇಲ್ಲದಿದ್ದರೆ ಸಸಿ ಮಡಿ ಮಾಡಿ ನಾಟಿ ಮಾಡಿ
+    action_en: Dry-sow finger millet 8-10 days before rain with 15-20% higher seed rate, or raise a long-duration nursery for transplanting; harden seed by soaking 18 hours then shade-drying 24 hours
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ನಾಲ್ಕು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about four weeks late
+
+  - id: onsetdelay.6wk.ragi
+    crop: ragi
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 5", "< 7"]
+    action_kn: ಕಿರು ಅವಧಿಯ ರಾಗಿ ತಳಿ ಬಳಸಿ (GPU-28, HR-911, Indaf-5)
+    action_en: Switch to a short-duration finger millet variety (GPU-28, HR-911, Indaf-5)
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ಆರು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about six weeks late
+
+  # --- 2.1.1's "normal onset, followed by 15-20 days dry spell after sowing, poor
+  #     germination" row: this district's table gives the SAME crop/soil management
+  #     text for every red-soil and black-soil system alike, so crop: any is faithful
+  #     here (unlike the onset-delay table above, which genuinely differs by crop) ---
+  - id: falseonset.poor_germination
+    crop: any
+    stage: sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_false_onset_w1: ">= 0.30"
+    action_kn: ಸಸಿ ವಿರಳಗೊಳಿಸಿ, ಖಾಲಿ ಜಾಗ ತುಂಬಿಸಿ ಅಥವಾ ಮತ್ತೆ ಬಿತ್ತನೆ ಮಾಡಿ; ಕಾಲುವೆ ಮಾಡಿ, ಮಣ್ಣು ಏರಿಸಿ, ಮಲ್ಚ್ ಹಾಕಿ
+    action_en: Thin and gap-fill the stand, or resow; open conservation furrows, earth up, and mulch to hold moisture
+    reason_kn: ಬಿತ್ತನೆ ಆದ 15-20 ದಿನಕ್ಕೆ ಮಳೆ ನಿಂತು ಮೊಳಕೆ ವಿಫಲವಾಗುವ ಸಾಧ್ಯತೆ
+    reason_en: Rain may stop 15-20 days after sowing and germination may fail
+
+  # --- mid season drought (long dry spell), vegetative stage: this district's table
+  #     explicitly labels separate groundnut and finger-millet actions within the same
+  #     red-soil row, so they're kept as separate crop-specific rules, not merged ---
+  - id: midseason.vegetative
+    crop: groundnut
+    stage: vegetative
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಮಳೆ ಬಂದ ಕೂಡಲೇ ಜಿಪ್ಸಂ ಹಾಕಿ, ಮಣ್ಣು ಏರಿಸಿ, ಕಳೆ ತೆಗೆಯಿರಿ, ಶೇ.2 ಡಿಎಪಿ ಸಿಂಪಡಿಸಿ, ಸಾಧ್ಯವಿದ್ದರೆ ರಕ್ಷಣಾ ನೀರಾವರಿ ಕೊಡಿ
+    action_en: Earth up and apply gypsum as soon as rain returns, spray 2% DAP, weed, and give life-saving irrigation if available
+    reason_kn: ಈ ಹಂತದಲ್ಲಿ ಜಿಪ್ಸಂ, ಡಿಎಪಿ ಶೇಂಗಾ ಕಾಯಿ ಕಟ್ಟಲು ನೆರವಾಗುತ್ತದೆ
+    reason_en: Gypsum and DAP at this stage protect groundnut pod fill during a dry spell
+
+  - id: midseason.vegetative.ragi
+    crop: ragi
+    stage: vegetative
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಸಸಿ ವಿರಳಗೊಳಿಸಿ, ಎಲೆ ತುದಿ ಮೇಯಿಸಿ, ಗೊಬ್ಬರ ಹಾಕುವುದನ್ನು ಮುಂದೂಡಿ, ಸಾಧ್ಯವಿದ್ದರೆ ರಕ್ಷಣಾ ನೀರಾವರಿ ಕೊಡಿ
+    action_en: Thin the stand, graze leaf tips, delay top dressing, and give life-saving irrigation if available
+    reason_kn: ಬೆಳವಣಿಗೆ ಹಂತದಲ್ಲಿ ದೀರ್ಘ ಒಣ ಅವಧಿ
+    reason_en: A long dry spell during ragi's growing stage
+
+  - id: midseason.vegetative.maize
+    crop: maize
+    stage: vegetative
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಸಸಿ ವಿರಳಗೊಳಿಸಿ, ಮಣ್ಣು ಏರಿಸಿ, ಕಳೆ ತೆಗೆಯಿರಿ, ಸಾಧ್ಯವಿದ್ದರೆ ರಕ್ಷಣಾ ನೀರಾವರಿ ಕೊಡಿ; ಬೆಳೆ ಚೇತರಿಸದಿದ್ದರೆ ಮೇವಿಗೆ ಕೊಯ್ಲು ಮಾಡಿ
+    action_en: Thin the stand, earth up, weed, and give life-saving irrigation if available; harvest for fodder if the crop cannot recover
+    reason_kn: ಬೆಳವಣಿಗೆ ಹಂತದಲ್ಲಿ ದೀರ್ಘ ಒಣ ಅವಧಿ
+    reason_en: A long dry spell during maize's growing stage
+
+  # --- mid season drought, reproductive/flowering stage: red-soil and black-soil
+  #     cropping systems share the same core actions here (irrigation, anti-transpirant
+  #     spray, weeding) — crop: any is faithful, and adds the anti-transpirant step the
+  #     statewide default doesn't mention ---
+  - id: midseason.flowering
+    crop: any
+    stage: flowering
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಸಾಧ್ಯವಿದ್ದರೆ ರಕ್ಷಣಾ ನೀರಾವರಿ ಕೊಡಿ, ನೀರಿನಾಂಶ ಉಳಿಸಲು ಔಷಧಿ ಸಿಂಪಡಿಸಿ, ಕಳೆ ತೆಗೆಯಿರಿ; ಬೆಳೆ ಚೇತರಿಸದಿದ್ದರೆ ಬೇಗ ಮೇವಿಗೆ ಕೊಯ್ಲು ಮಾಡಿ
+    action_en: Give life-saving irrigation if available, spray an anti-transpirant, and weed the field; harvest early for fodder if the crop cannot recover
+    reason_kn: ಹೂ ಬಿಡುವ ಹಂತದಲ್ಲಿ ಒಣ ಅವಧಿ — ಇಳುವರಿಗೆ ಹೆಚ್ಚು ಅಪಾಯಕಾರಿ
+    reason_en: Flowering stage is the most yield-sensitive time for a dry spell to hit
+
+  # --- 2.2 unusual rains: this district's maturity/post-harvest table gives the same
+  #     "drain excess water, harvest at physiological maturity, dry and store in shade"
+  #     instruction for groundnut, finger millet, sunflower and maize alike — no crop
+  #     differentiates the way Tumakuru's or Chikkaballapur's harvest-stage advice does,
+  #     so it's genuinely identical to the statewide default and skipped, not restated ---

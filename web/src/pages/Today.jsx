@@ -10,6 +10,7 @@ import Ribbon from "../components/Ribbon.jsx";
 import Tabs from "../components/Tabs.jsx";
 import { Shell, Msg, Rubric } from "../components/Frame.jsx";
 import { Pin, Fwd, Tick } from "../components/Marks.jsx";
+import LangSwitch from "../components/LangSwitch.jsx";
 
 export default function Today() {
   const { areaId, lang, place } = loadPrefs();
@@ -52,6 +53,7 @@ export default function Today() {
             {karte ? <> · <span className="kn" style={{ fontWeight: 600 }}>{karte[lang] ?? karte.en} ಕಾರ್ತೆ</span></> : null}
           </div>
         </div>
+        <LangSwitch lang={lang} />
       </div>
 
       <div className="grow">

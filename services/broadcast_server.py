@@ -1,8 +1,8 @@
 """Local backend for the officer dashboard's "Review broadcast" button.
 
 The frontend is a static site with no backend of its own (Vercel isn't linked yet —
-see IMPLEMENTATION_PLAN.md), and the real senders need secrets — bot tokens, Twilio's
-auth token, Supabase's service key — that must never reach the browser. This process
+see IMPLEMENTATION_PLAN.md), and the real senders need secrets — bot tokens,
+Supabase's service key — that must never reach the browser. This process
 is that boundary: run it on the officer's own machine alongside `npm run dev`, and
 the browser only ever holds a shared passcode.
 
@@ -33,10 +33,9 @@ from advisory_text import compose  # noqa: E402
 
 
 def _load_channel(name: str, path: Path):
-    """telegram/send.py, whatsapp/send.py and sms/send.py all share the basename
-    'send' — a plain `import send` for each would collide in sys.modules. Loading
-    each by its file path under a distinct name sidesteps that (same fix as the
-    test suite's own _load() helper in tests/test_p8_supabase.py)."""
+    """telegram/send.py and whatsapp/send.py share the basename 'send' —
+    a plain `import send` for each would collide in sys.modules. Loading
+    each by its file path under a distinct name sidesteps that."""
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -45,7 +44,6 @@ def _load_channel(name: str, path: Path):
 
 TG = _load_channel("broadcast_telegram", ROOT / "services" / "telegram" / "send.py")
 WA = _load_channel("broadcast_whatsapp", ROOT / "services" / "whatsapp" / "send.py")
-SMS = _load_channel("broadcast_sms", ROOT / "services" / "sms" / "send.py")
 
 
 def load_env():
@@ -67,9 +65,6 @@ def configured_channels() -> dict:
         "telegram": bool(os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()),
         "whatsapp": bool(os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "").strip()
                          and os.environ.get("WHATSAPP_ACCESS_TOKEN", "").strip()),
-        "sms": bool(os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
-                    and os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
-                    and os.environ.get("TWILIO_FROM_NUMBER", "").strip()),
     }
 
 
@@ -101,19 +96,6 @@ def send_one(channel: str, area_id: str, text: str) -> dict:
                       "text": {"body": text, "preview_url": False}}
             r = WA.call(phone_id, token, payload)
             ok += 1 if r.get("messages") else 0
-        return {"ok": ok, "failed": len(subs) - ok, "error": None}
-
-    if channel == "sms":
-        sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
-        auth = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
-        from_number = os.environ.get("TWILIO_FROM_NUMBER", "").strip()
-        if not sid or not auth or not from_number:
-            return {"ok": 0, "failed": len(subs), "error": "TWILIO_ACCOUNT_SID/TWILIO_AUTH_TOKEN/TWILIO_FROM_NUMBER not set"}
-        plain = SMS.plain_text(text)
-        ok = 0
-        for s in subs:
-            r = SMS.call(sid, auth, To=s["destination"], From=from_number, Body=plain)
-            ok += 1 if r.get("status") in ("queued", "sent", "accepted") else 0
         return {"ok": ok, "failed": len(subs) - ok, "error": None}
 
     return {"ok": 0, "failed": 0, "error": f"unknown channel {channel!r}"}
@@ -166,6 +148,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/health":
             return self._json(200, {"ok": True, "token_set": bool(TOKEN), "configured": configured_channels()})
+        if self.path == "/api/subscriber-counts":
+            # Aggregate counts only, never destinations — this is what lets the officer
+            # table show "N subscribers" without needing the passcode just to look.
+            counts: dict = {}
+            for s in SB.fetch_subscribers():
+                counts[s["area_id"]] = counts.get(s["area_id"], 0) + 1
+            return self._json(200, counts)
         if self.path.startswith("/api/preview"):
             qs = self.path.split("?", 1)[1] if "?" in self.path else ""
             params = dict(p.split("=", 1) for p in qs.split("&") if "=" in p)

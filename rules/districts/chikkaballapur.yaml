@@ -1,0 +1,181 @@
+# Chikkaballapura — rainfed ragi (finger millet) and groundnut, per the district's own
+# CRIDA contingency plan (data/raw/crida/KA_Chikkaballapur.pdf, pages 7-15). These are the
+# top two rainfed kharif crops by area (1.7: ragi 47.4k ha, groundnut 32.6k ha). Ragi
+# kharif-rainfed sowing window is July 2nd week - August 2nd week (section 1.12) — later
+# than Tumakuru's June-July window, but this file only encodes district content, not the
+# engine's sowing-window anchor, so no engine change is implied here.
+district: Chikkaballapura
+source_doc: ICAR-CRIDA Chikkaballapur district agriculture contingency plan
+rules:
+  # --- 2.1.1 rainfed situation: early season drought (delayed onset), by crop.
+  #     Same 2/4/6/8-week tiers as the statewide default. The 8-week tier's "Crop
+  #     Management" cell for finger millet is blank ("-") in this district's own table
+  #     (its rainfed sowing window ends in August, before the 8-week/September mark), so
+  #     there is no ragi override at that tier — the statewide onsetdelay.8wk applies. ---
+  - id: onsetdelay.2wk
+    crop: ragi
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 1", "< 3"]
+    action_kn: ಬದಲಾವಣೆ ಬೇಡ — GPU-28, HR-911, L-5, GPU-66 ತಳಿ ಆಗಸ್ಟ್ ಮಧ್ಯದವರೆಗೆ ಬಿತ್ತಬಹುದು, ಸಾಲು ಬೇಸಾಯ ಮತ್ತು ಸಣ್ಣ ಬದು ಮಾಡಿ
+    action_en: No change yet — GPU-28, HR-911, L-5 or GPU-66 can still be sown up to mid-August; follow contour cultivation with small bunds
+    reason_kn: ಮುಂಗಾರು ಇನ್ನೂ ಎರಡು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about two weeks late so far
+
+  - id: onsetdelay.4wk
+    crop: ragi
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 3", "< 5"]
+    action_kn: GPU-28, HR-911, PR-202 ಅಥವಾ GPU-26 ತಳಿಗೆ ಬದಲಾಯಿಸಿ, ಬೀಜ ಗಟ್ಟಿ ಮಾಡಿ, ಮಳೆ ಬರುವ 8-10 ದಿನ ಮೊದಲೇ ಶೇ.15-20 ಹೆಚ್ಚು ಬೀಜ ಹಾಕಿ ಬಿತ್ತಿ
+    action_en: Switch to GPU-28, HR-911, PR-202 or GPU-26; harden the seed and dry-sow 8-10 days before rain with 15-20% higher seed rate
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ನಾಲ್ಕು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about four weeks late
+
+  - id: onsetdelay.6wk
+    crop: ragi
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 5", "< 7"]
+    action_kn: ಕಿರು ಅವಧಿಯ ರಾಗಿ ತಳಿಗೆ ಬದಲಾಯಿಸಿ (GPU-45, GPU-46, PR-202), ಮಳೆ ಬರುವ 8-10 ದಿನ ಮೊದಲೇ ಶೇ.15-20 ಹೆಚ್ಚು ಬೀಜ ಹಾಕಿ ಬಿತ್ತಿ
+    action_en: Switch to a short-duration ragi variety (GPU-45, GPU-46, PR-202); dry-sow 8-10 days before rain with 15-20% higher seed rate
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ಆರು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about six weeks late
+
+  - id: onsetdelay.2wk.groundnut
+    crop: groundnut
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 1", "< 3"]
+    action_kn: ಬದಲಾವಣೆ ಬೇಡ — ಶೇಂಗಾ+ತೊಗರಿ JL-24 ಅಥವಾ TMV-2 ತಳಿ ಮುಂದುವರಿಸಿ, ಬದು ಕಟ್ಟಿ ಕಾಲುವೆ ಮಾಡಿ
+    action_en: No change yet — continue groundnut + pigeon pea with JL-24 or TMV-2; add contour bunds and a conservation furrow
+    reason_kn: ಮುಂಗಾರು ಇನ್ನೂ ಎರಡು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about two weeks late so far
+
+  # NOTE: this district's own table lists the "Groundnut +Pigeonpea" row's 4-week tier as
+  # "-do-" and its 6-week tier as "Prefer short duration varieties of Ragi: GPU-45, GPU-46,
+  # PR 202" — i.e. it literally repeats the finger-millet row's ragi-variety text against
+  # the groundnut row, not a real groundnut instruction. Treated as a source copy-paste
+  # error and skipped rather than attributing a ragi variety to groundnut; the statewide
+  # default's generic onsetdelay.4wk/6wk (crop: any) covers groundnut at those tiers.
+  - id: onsetdelay.8wk.groundnut
+    crop: groundnut
+    stage: pre_sowing
+    severity: critical
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: ">= 7"
+    action_kn: ಶೇಂಗಾ ಬದಲು ಅಲಸಂದೆ ಅಥವಾ ಹುರುಳಿ ಬೆಳೆಯಿರಿ
+    action_en: Switch from groundnut to cowpea or horse gram
+    reason_kn: ಮುಂಗಾರು ಎಂಟು ವಾರಕ್ಕಿಂತ ಹೆಚ್ಚು ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is more than eight weeks late
+
+  # --- 2.1.1's "normal onset followed by 15-20 days dry spell after sowing leading to
+  #     poor germination/crop stand" row ---
+  - id: falseonset.poor_germination
+    crop: ragi
+    stage: sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_false_onset_w1: ">= 0.30"
+    action_kn: ಖಾಲಿ ಜಾಗದಲ್ಲಿ ಸಸಿ ನಾಟಿ ಮಾಡಿ, ಅಂಚಿನಲ್ಲಿ ಅಲಸಂದೆ ಬಿತ್ತಿ, ಒತ್ತಡ ಕಡಿಮೆಯಾದ ಮೇಲೆ ಗೊಬ್ಬರ ಹಾಕಿ
+    action_en: Gap-fill with raised seedlings and cowpea dibbled along the borders; thin and top-dress once the dry spell eases
+    reason_kn: ಬಿತ್ತನೆ ನಂತರ ಮಳೆ ನಿಂತು ಮೊಳಕೆ ವಿಫಲವಾಗುವ ಸಾಧ್ಯತೆ
+    reason_en: Rain may stop after sowing and germination may fail
+
+  - id: falseonset.poor_germination.groundnut
+    crop: groundnut
+    stage: sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_false_onset_w1: ">= 0.30"
+    action_kn: ಖಾಲಿ ಜಾಗದಲ್ಲಿ ಅಲಸಂದೆ ಬಿತ್ತಿ ತುಂಬಿಸಿ, ಸಾಲುಗಳ ನಡುವೆ ಸಣ್ಣ ಕಾಲುವೆ ಮಾಡಿ
+    action_en: Gap-fill thin patches with cowpea; add small bunds and a furrow between paired rows
+    reason_kn: ಬಿತ್ತನೆ ನಂತರ ಮಳೆ ನಿಂತು ಮೊಳಕೆ ವಿಫಲವಾಗುವ ಸಾಧ್ಯತೆ
+    reason_en: Rain may stop after sowing and germination may fail
+
+  # --- 2.1.1 mid season drought (2 consecutive rainless weeks), vegetative vs flowering ---
+  - id: midseason.vegetative
+    crop: ragi
+    stage: vegetative
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಸಸಿ ವಿರಳಗೊಳಿಸಿ, ಖಾಲಿ ಜಾಗದಲ್ಲಿ ಅಲಸಂದೆ ನಾಟಿ ಮಾಡಿ, ಒತ್ತಡ ಕಡಿಮೆಯಾದ ಮೇಲೆ ಹೆಕ್ಟೇರ್‌ಗೆ 12.5 ಕೆ.ಜಿ. ಸಾರಜನಕ ಗೊಬ್ಬರ ಹಾಕಿ
+    action_en: Thin the stand, gap-fill with cowpea, and top-dress 12.5 kg N/ha once the dry spell eases
+    reason_kn: ಬೆಳವಣಿಗೆ ಹಂತದಲ್ಲಿ ದೀರ್ಘ ಒಣ ಅವಧಿಯ ಸಾಧ್ಯತೆ
+    reason_en: A long dry spell is likely during the growing stage
+
+  - id: midseason.vegetative.groundnut
+    crop: groundnut
+    stage: vegetative
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಸಾಲುಗಳ ನಡುವೆ ಕಾಲುವೆ ಮಾಡಿ ತೇವ ಉಳಿಸಿ
+    action_en: Open a conservation furrow between paired rows to hold the remaining soil moisture
+    reason_kn: ಬೆಳವಣಿಗೆ ಹಂತದಲ್ಲಿ ದೀರ್ಘ ಒಣ ಅವಧಿಯ ಸಾಧ್ಯತೆ
+    reason_en: A long dry spell is likely during the growing stage
+
+  - id: midseason.flowering
+    crop: ragi
+    stage: flowering
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಒತ್ತಡ ಕಡಿಮೆಯಾದ ಮೇಲೆ ಎರಡನೇ ಸಾರಜನಕ ಗೊಬ್ಬರ (ಹೆಕ್ಟೇರ್‌ಗೆ 12.5 ಕೆ.ಜಿ.) ಹಾಕಿ, ಅಂತರ ಬೇಸಾಯ ಮತ್ತೆ ಮಾಡಿ
+    action_en: Once the dry spell eases, give the second top dressing (12.5 kg N/ha) and repeat intercultivation
+    reason_kn: ಹೂ ಬಿಡುವ ಹಂತದಲ್ಲಿ ಒಣ ಅವಧಿ ಇಳುವರಿಗೆ ಹೆಚ್ಚು ಅಪಾಯಕಾರಿ
+    reason_en: Flowering stage is the most yield-sensitive time for a dry spell to hit
+
+  - id: midseason.flowering.groundnut
+    crop: groundnut
+    stage: flowering
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಸಣ್ಣ ಬದು ಕಟ್ಟಿ, ಸಾಲುಗಳ ನಡುವೆ ಕಾಲುವೆ ಮಾಡಿ, ಅಂತರ ಬೇಸಾಯ ಮತ್ತೆ ಮಾಡಿ
+    action_en: Add small bunds and a furrow between paired rows, and repeat intercultivation
+    reason_kn: ಹೂ/ಕಾಯಿ ಕಟ್ಟುವ ಹಂತದಲ್ಲಿ ಒಣ ಅವಧಿ ಇಳುವರಿಗೆ ಹೆಚ್ಚು ಅಪಾಯಕಾರಿ
+    reason_en: Flowering/pegging stage is the most yield-sensitive time for a dry spell to hit
+
+  # --- 2.2 unusual rains: crop-maturity/post-harvest action differs meaningfully by crop
+  #     (the vegetative/flowering rows just say "drain excess water", already covered by
+  #     the statewide default's heavyrain.drainage, so not duplicated here) ---
+  - id: unusualrain.maturity
+    crop: ragi
+    stage: maturity
+    severity: warn
+    table: "2.2"
+    when:
+      p_heavy_w1: ">= 0.30"
+    action_kn: ಮಳೆ ನಿಲ್ಲುವವರೆಗೆ ಕೊಯ್ಲು ಮುಂದೂಡಿ, ನಂತರ ಮಳೆ ನಿರೋಧಕ ರಾಶಿ ಮಾಡಿ
+    action_en: Delay harvesting until rain stops; then stack the grain in rain-proof heaps
+    reason_kn: ಕೊಯ್ಲು ಹಂತದಲ್ಲಿ ಭಾರೀ ಮಳೆಯಿಂದ ಬೆಳೆ ನಷ್ಟದ ಅಪಾಯ
+    reason_en: Heavy rain at harvest time risks losing the crop
+
+  - id: unusualrain.maturity.groundnut
+    crop: groundnut
+    stage: maturity
+    severity: warn
+    table: "2.2"
+    when:
+      p_heavy_w1: ">= 0.30"
+    action_kn: ಕೊಯ್ಲು ಮುಂದೂಡಿ, ಮಳೆ ನಿಂತ ಕೂಡಲೇ ಕೊಯ್ಲು ಮಾಡಿ ಗಿಡಗಳನ್ನು ರಾಶಿ ಮಾಡಿ
+    action_en: Delay harvesting; harvest immediately once rain stops and heap the plants
+    reason_kn: ಕೊಯ್ಲು ಹಂತದಲ್ಲಿ ಭಾರೀ ಮಳೆಯಿಂದ ಬೆಳೆ ನಷ್ಟದ ಅಪಾಯ
+    reason_en: Heavy rain at harvest time risks losing the crop

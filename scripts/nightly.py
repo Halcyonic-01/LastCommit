@@ -150,6 +150,7 @@ def run_one_day(as_of: str, offline: bool, out: Path, pilot_only: bool = False,
     log("assembling areas + CRIDA advisories")
     packs = E.load_rules()
     month = pd.Timestamp(as_of).month
+    as_of_date = date.fromisoformat(as_of)
     areas = []
     for area in areas_from_geo(pilot_only):
         tab = per_area.get(area.level)
@@ -177,12 +178,13 @@ def run_one_day(as_of: str, offline: bool, out: Path, pilot_only: bool = False,
         )
         # dry spell is the weak target (negative in 10/34 seasons); say so in the contract
         area.confidence = month_confidence(month, weak_target=area.p_dry7["w1"] >= 0.25)
+        stage = E.crop_stage(as_of_date, area.onset_delay_weeks or 0.0)
         area.advisories = E.evaluate({
             "district_en": area.district_en, "p_onset": area.p_onset,
             "p_false_onset": area.p_false_onset, "p_dry7": area.p_dry7,
             "p_dry14": area.p_dry14, "p_heavy": area.p_heavy,
             "onset_delay_weeks": area.onset_delay_weeks or 0.0,
-        }, packs=packs)
+        }, stage=stage, packs=packs)
         areas.append(area)
     log(f"  {len(areas)} areas with advisories")
 

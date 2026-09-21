@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 // The dashboard has no backend of its own yet (Vercel isn't linked — see
 // IMPLEMENTATION_PLAN.md), so "Review broadcast" talks to services/broadcast_server.py
 // running on the officer's own machine. Hardcoded, not an env var: this is a fixed
-// local port by design, not a deployment target.
-const API = "http://localhost:8787";
+// local port by design, not a deployment target. Exported so Officer.jsx's
+// subscriber-count fetch hits the same server without a second hardcoded copy.
+export const BROADCAST_API = "http://localhost:8787";
 const TOKEN_KEY = "vd.officer.token";
 
 const CHANNEL_LABEL = { telegram: "Telegram", whatsapp: "WhatsApp", sms: "SMS" };
@@ -19,10 +20,10 @@ export default function BroadcastPanel({ areaIds, areaNames, event, lead, onClos
   const [result, setResult] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/api/health`).then((r) => r.json())
+    fetch(`${BROADCAST_API}/api/health`).then((r) => r.json())
       .then((h) => { setHealth(h); setChannels(new Set(Object.keys(h.configured).filter((c) => h.configured[c]))); })
       .catch(() => setHealth("down"));
-    fetch(`${API}/api/preview?areaId=${encodeURIComponent(areaIds[0])}`).then((r) => r.json())
+    fetch(`${BROADCAST_API}/api/preview?areaId=${encodeURIComponent(areaIds[0])}`).then((r) => r.json())
       .then((p) => setPreview(p.text ? p : "down")).catch(() => setPreview("down"));
   }, [areaIds]);
 
@@ -41,7 +42,7 @@ export default function BroadcastPanel({ areaIds, areaNames, event, lead, onClos
     setSending(true);
     setResult(null);
     try {
-      const r = await fetch(`${API}/api/broadcast`, {
+      const r = await fetch(`${BROADCAST_API}/api/broadcast`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, areaIds, event, lead, channels: [...channels] }),
       });
