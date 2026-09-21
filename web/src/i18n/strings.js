@@ -24,6 +24,11 @@ export const S = {
   phoneNote:    { kn: "ಮೇಲಿನವುಗಳಂತಲ್ಲ, ಇದು ಈ ಫೋನ್ ಬಿಟ್ಟು ಹೋಗುತ್ತದೆ — WhatsApp ಅಥವಾ SMS ಮೂಲಕ ಸಂದೇಶ ಕಳುಹಿಸಲು.", hi: "ऊपर वालों के विपरीत, यह इस फ़ोन से बाहर जाता है — ताकि हम WhatsApp या SMS पर संदेश भेज सकें।", te: "పైవాటిలా కాకుండా, ఇది ఈ ఫోన్ నుండి బయటకు వెళుతుంది — WhatsApp లేదా SMS ద్వారా సందేశం పంపడానికి.", en: "Unlike your choices above, this leaves the phone — so we can message you on WhatsApp or SMS." },
   phoneSaved:   { kn: "ಉಳಿಸಲಾಗಿದೆ — ಈ ಸಂಖ್ಯೆಗೆ ಸಂದೇಶ ಕಳುಹಿಸುತ್ತೇವೆ", hi: "सहेजा गया — इस नंबर पर संदेश भेजेंगे", te: "సేవ్ చేయబడింది — ఈ నంబర్‌కు సందేశం పంపుతాము", en: "Saved — we'll message this number" },
   phoneFailed:  { kn: "ಉಳಿಸಲು ಆಗಲಿಲ್ಲ — ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", hi: "सहेज नहीं सके — बाद में फिर कोशिश करें", te: "సేవ్ చేయలేకపోయాము — తర్వాత మళ్ళీ ప్రయత్నించండి", en: "Could not save — try again later" },
+  // Officer messages, shown on the farmer's own notification page
+  messages:       { kn: "ಸಂದೇಶಗಳು", hi: "संदेश", te: "సందేశాలు", en: "Messages" },
+  noMessages:     { kn: "ಇನ್ನೂ ಸಂದೇಶ ಇಲ್ಲ", hi: "अभी कोई संदेश नहीं", te: "ఇంకా సందేశాలు లేవు", en: "No messages yet" },
+  noMessagesHint: { kn: "ಕೃಷಿ ಅಧಿಕಾರಿ ಸಲಹೆ ಕಳುಹಿಸಿದಾಗ ಇಲ್ಲಿ ಕಾಣಿಸುತ್ತದೆ", hi: "कृषि अधिकारी सलाह भेजेंगे तो यहाँ दिखेगी", te: "వ్యవసాయ అధికారి సలహా పంపినప్పుడు ఇక్కడ కనిపిస్తుంది", en: "Advice from your agriculture officer appears here" },
+
   // Voice assistant
   voiceAssistant: { kn: "ಧ್ವನಿ ಸಹಾಯಕ", hi: "आवाज़ सहायक", te: "వాయిస్ అసిస్టెంట్", en: "Voice Assistant" },
   holdToSpeak:    { kn: "ಒತ್ತಿ ಹಿಡಿದು ಮಾತನಾಡಿ", hi: "दबाकर बोलें", te: "నొక్కి పట్టి మాట్లాడండి", en: "Hold to speak" },

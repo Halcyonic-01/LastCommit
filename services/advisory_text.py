@@ -1,8 +1,8 @@
-"""Kannada advisory text, shared by every messaging channel (Telegram, WhatsApp, ...).
+"""Kannada advisory text, shared by every channel: the farmer app, WhatsApp, SMS.
 
-Pulled out of services/telegram/send.py once WhatsApp needed the identical text —
-both platforms use the same *bold*/_italic_ convention, so there was nothing
-channel-specific left in this function.
+One composer, so no channel can drift into showing different advice from another.
+The *bold*/_italic_ markers are WhatsApp's own convention and the farmer app renders
+them; services/notify/providers.py strips them for SMS, which cannot show them.
 """
 
 import json

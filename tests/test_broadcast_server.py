@@ -2,8 +2,7 @@
 
 The HTTP-level tests run the real server on an ephemeral port so the token check,
 JSON error paths, and status codes are tested as real requests, not just direct
-function calls. Only Supabase and the outbound Telegram/WhatsApp/Twilio calls are
-mocked — never a real send.
+function calls. Only Supabase and the outbound provider calls are mocked — never a real send.
 """
 
 import json
@@ -23,77 +22,47 @@ sys.path.insert(0, str(ROOT / "services"))
 import broadcast_server as BS  # noqa: E402
 
 REAL_AREA = "KGIS-T-0101"  # Chikkodi block — confirmed present in forecast/area/
-FAKE_TOKEN = "fake-broadcast-token"  # not a real secret — matches services/telegram's own "fake-token" convention
+FAKE_TOKEN = "fake-broadcast-token"  # not a real secret, just a value the handler will accept
 
 
-# --- send_one(): one channel, one area ---------------------------------------
+# --- run_broadcast(): every area x every channel, through the dispatcher ------------
 
-def test_send_one_no_subscribers_is_not_an_error(monkeypatch):
-    monkeypatch.setattr(BS.SB, "fetch_subscribers", lambda channel=None, area_id=None: [])
-    assert BS.send_one("telegram", "AREA", "hello") == {"ok": 0, "failed": 0, "error": None}
-
-
-def test_send_one_missing_credential_fails_without_crashing(monkeypatch):
-    monkeypatch.setattr(BS.SB, "fetch_subscribers", lambda channel=None, area_id=None: [{"destination": "111"}])
-    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
-    r = BS.send_one("telegram", "AREA", "hello")
-    assert r["ok"] == 0 and r["failed"] == 1 and "TELEGRAM_BOT_TOKEN" in r["error"]
-
-
-def test_send_one_telegram_success(monkeypatch):
-    monkeypatch.setattr(BS.SB, "fetch_subscribers",
-                        lambda channel=None, area_id=None: [{"destination": "111"}, {"destination": "222"}])
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
-    monkeypatch.setattr(BS.TG, "call", lambda token, method, **p: {"ok": True})
-    assert BS.send_one("telegram", "AREA", "hello") == {"ok": 2, "failed": 0, "error": None}
-
-
-def test_send_one_whatsapp_success(monkeypatch):
-    monkeypatch.setattr(BS.SB, "fetch_subscribers", lambda channel=None, area_id=None: [{"destination": "919999"}])
-    monkeypatch.setenv("WHATSAPP_PHONE_NUMBER_ID", "id")
-    monkeypatch.setenv("WHATSAPP_ACCESS_TOKEN", "tok")
-    monkeypatch.setattr(BS.WA, "call", lambda phone_id, token, payload: {"messages": [{"id": "wamid.1"}]})
-    assert BS.send_one("whatsapp", "AREA", "hello") == {"ok": 1, "failed": 0, "error": None}
-
-
-# --- run_broadcast(): every area x every channel, then log -------------------
-
-def test_run_broadcast_logs_only_the_channel_that_actually_sent(monkeypatch):
-    monkeypatch.setattr(BS, "compose", lambda area_file: "TEXT")
-    monkeypatch.setattr(BS.SB, "fetch_subscribers",
-                        lambda channel=None, area_id=None: [{"destination": "x"}] if channel == "telegram" else [])
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
-    monkeypatch.setattr(BS.TG, "call", lambda token, method, **p: {"ok": True})
-    logged = []
+def test_run_broadcast_delegates_to_the_dispatcher_and_logs_what_sent(monkeypatch):
+    calls, logged = [], []
+    monkeypatch.setattr(BS.ND, "dispatch", lambda area_id, channel, **kw: calls.append((area_id, channel)) or {
+        "sent": 1 if channel == "inapp" else 0, "failed": 0, "skipped": 0,
+        "simulated": channel != "inapp", "note": None})
     monkeypatch.setattr(BS.SB, "log_broadcast", lambda **kw: logged.append(kw) or True)
 
-    result = BS.run_broadcast([REAL_AREA], "p_dry7", "w1", ["telegram", "whatsapp"])
+    result = BS.run_broadcast([REAL_AREA], "p_dry7", "w1", ["inapp", "whatsapp"])
 
-    assert result == {"sent": 1, "failed": 0, "results": [
-        {"area_id": REAL_AREA, "channel": "telegram", "ok": 1, "failed": 0, "error": None},
-        {"area_id": REAL_AREA, "channel": "whatsapp", "ok": 0, "failed": 0, "error": None},
-    ]}
-    assert len(logged) == 1 and logged[0]["channel"] == "telegram" and logged[0]["recipient_count"] == 1
+    assert calls == [(REAL_AREA, "inapp"), (REAL_AREA, "whatsapp")]
+    assert result["sent"] == 1 and result["failed"] == 0
+    assert len(logged) == 1 and logged[0]["channel"] == "inapp"
 
 
-def test_run_broadcast_reports_missing_area_file_without_raising():
-    result = BS.run_broadcast(["KGIS-T-DOES-NOT-EXIST"], "p_dry7", "w1", ["telegram"])
-    assert result["results"] == [{"area_id": "KGIS-T-DOES-NOT-EXIST", "error": "no forecast file for this area"}]
+def test_run_broadcast_reports_a_bad_area_without_raising(monkeypatch):
+    monkeypatch.setattr(BS.SB, "log_broadcast", lambda **kw: True)
+    result = BS.run_broadcast(["KGIS-T-DOES-NOT-EXIST"], "p_dry7", "w1", ["inapp"])
+    assert result["results"][0]["error"] == "no forecast file for this area"
 
 
-def test_run_broadcast_rejects_a_path_traversal_area_id():
+def test_run_broadcast_rejects_a_path_traversal_area_id(monkeypatch):
     """Area ids flow straight into a filesystem path — must not trust client input."""
-    result = BS.run_broadcast(["../../etc/passwd"], "p_dry7", "w1", ["telegram"])
-    assert result["results"] == [{"area_id": "../../etc/passwd", "error": "invalid area id"}]
+    monkeypatch.setattr(BS.SB, "log_broadcast", lambda **kw: True)
+    result = BS.run_broadcast(["../../etc/passwd"], "p_dry7", "w1", ["inapp"])
+    assert result["results"][0]["error"] == "invalid area id"
 
 
 # --- the HTTP server itself ---------------------------------------------------
 
 @pytest.fixture
-def server(monkeypatch):
+def server(monkeypatch, tmp_path):
     monkeypatch.setattr(BS, "TOKEN", FAKE_TOKEN)
     monkeypatch.setattr(BS.SB, "fetch_subscribers", lambda channel=None, area_id=None: [])
     monkeypatch.setattr(BS.SB, "log_broadcast", lambda **kw: True)
+    monkeypatch.setattr(BS.NS.SB, "client", lambda: None)  # never reach the real project
+    monkeypatch.setattr(BS.NS, "LOCAL", tmp_path / "notifications.jsonl")
     httpd = ThreadingHTTPServer(("localhost", 0), BS.Handler)
     port = httpd.server_address[1]
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -123,14 +92,11 @@ def _post(base, path, payload):
         return e.code, json.loads(e.read())
 
 
-def test_health_reports_token_and_channel_configuration(server, monkeypatch):
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "x")
-    monkeypatch.delenv("WHATSAPP_ACCESS_TOKEN", raising=False)
+def test_health_reports_token_and_channel_configuration(server):
     status, body = _get(server, "/api/health")
     assert status == 200
     assert body["token_set"] is True
-    assert body["configured"]["telegram"] is True
-    assert body["configured"]["whatsapp"] is False
+    assert set(body["configured"]) == set(BS.NP.CHANNELS)
 
 
 def test_subscriber_counts_are_aggregated_never_raw_destinations(server, monkeypatch):
@@ -146,13 +112,13 @@ def test_subscriber_counts_are_aggregated_never_raw_destinations(server, monkeyp
 
 def test_broadcast_rejects_missing_token(server):
     status, body = _post(server, "/api/broadcast",
-                         {"areaIds": [REAL_AREA], "event": "p_dry7", "lead": "w1", "channels": ["telegram"]})
+                         {"areaIds": [REAL_AREA], "event": "p_dry7", "lead": "w1", "channels": ["inapp"]})
     assert status == 401
 
 
 def test_broadcast_rejects_wrong_token(server):
     status, body = _post(server, "/api/broadcast",
-                         {"token": "wrong", "areaIds": [REAL_AREA], "event": "p_dry7", "lead": "w1", "channels": ["telegram"]})
+                         {"token": "wrong", "areaIds": [REAL_AREA], "event": "p_dry7", "lead": "w1", "channels": ["inapp"]})
     assert status == 401
 
 
@@ -171,7 +137,7 @@ def test_broadcast_rejects_malformed_json(server):
 def test_broadcast_succeeds_with_the_right_token(server):
     status, body = _post(server, "/api/broadcast",
                          {"token": FAKE_TOKEN, "areaIds": [REAL_AREA], "event": "p_dry7", "lead": "w1",
-                          "channels": ["telegram"]})
+                          "channels": ["whatsapp"]})
     assert status == 200
     assert body["sent"] == 0 and body["failed"] == 0  # fixture stubs zero subscribers — no crash either way
 

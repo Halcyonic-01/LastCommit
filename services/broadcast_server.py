@@ -19,6 +19,7 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -30,19 +31,21 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "services"))
 from varshadrishti.data import supabase_client as SB  # noqa: E402
 from advisory_text import compose  # noqa: E402
+from notify import dispatcher as ND  # noqa: E402
+from notify import providers as NP  # noqa: E402
+from notify import store as NS  # noqa: E402
 
 
 def _load_channel(name: str, path: Path):
-    """telegram/send.py and whatsapp/send.py share the basename 'send' —
-    a plain `import send` for each would collide in sys.modules. Loading
-    each by its file path under a distinct name sidesteps that."""
+    """services/*/send.py all share the basename 'send' — a plain `import send` for
+    each would collide in sys.modules. Loading each by file path under a distinct
+    name sidesteps that."""
     spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
 
 
-TG = _load_channel("broadcast_telegram", ROOT / "services" / "telegram" / "send.py")
 WA = _load_channel("broadcast_whatsapp", ROOT / "services" / "whatsapp" / "send.py")
 
 
@@ -61,75 +64,50 @@ TOKEN = os.environ.get("OFFICER_BROADCAST_TOKEN", "").strip()
 
 
 def configured_channels() -> dict:
-    return {
-        "telegram": bool(os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()),
-        "whatsapp": bool(os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "").strip()
-                         and os.environ.get("WHATSAPP_ACCESS_TOKEN", "").strip()),
-    }
-
-
-def send_one(channel: str, area_id: str, text: str) -> dict:
-    """-> {ok, failed, error}. Never raises — one bad channel or missing credential
-    must not stop the other channels/areas in the same broadcast."""
-    subs = SB.fetch_subscribers(channel=channel, area_id=area_id)
-    if not subs:
-        return {"ok": 0, "failed": 0, "error": None}
-
-    if channel == "telegram":
-        token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-        if not token:
-            return {"ok": 0, "failed": len(subs), "error": "TELEGRAM_BOT_TOKEN not set"}
-        ok = 0
-        for s in subs:
-            r = TG.call(token, "sendMessage", chat_id=s["destination"], text=text, parse_mode="Markdown")
-            ok += 1 if r.get("ok") else 0
-        return {"ok": ok, "failed": len(subs) - ok, "error": None}
-
-    if channel == "whatsapp":
-        phone_id = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "").strip()
-        token = os.environ.get("WHATSAPP_ACCESS_TOKEN", "").strip()
-        if not phone_id or not token:
-            return {"ok": 0, "failed": len(subs), "error": "WHATSAPP_PHONE_NUMBER_ID/WHATSAPP_ACCESS_TOKEN not set"}
-        ok = 0
-        for s in subs:
-            payload = {"messaging_product": "whatsapp", "to": s["destination"], "type": "text",
-                      "text": {"body": text, "preview_url": False}}
-            r = WA.call(phone_id, token, payload)
-            ok += 1 if r.get("messages") else 0
-        return {"ok": ok, "failed": len(subs) - ok, "error": None}
-
-    return {"ok": 0, "failed": 0, "error": f"unknown channel {channel!r}"}
+    """What /api/broadcast can reach. The notification console reads
+    /api/notification-channels instead, which also reports simulation."""
+    return {ch: NP.provider_for(ch).configured() for ch in NP.CHANNELS}
 
 
 def run_broadcast(area_ids: list, event: str, lead: str, channels: list) -> dict:
+    """Every queued area x every chosen channel, through the one dispatcher.
+
+    This used to hold its own per-channel send loop beside services/notify/. Two send
+    paths meant two places for a channel to drift, so the button and the console now
+    share one: the dispatcher validates, suppresses duplicates, and records every
+    message, whichever surface asked for it.
+    """
     results = []
     for area_id in area_ids:
-        if not AREA_ID_RE.match(area_id):
-            results.append({"area_id": area_id, "error": "invalid area id"})
-            continue
-        area_file = ROOT / "forecast" / "area" / f"{area_id}.json"
-        if not area_file.exists():
-            results.append({"area_id": area_id, "error": "no forecast file for this area"})
-            continue
-        text = compose(area_file)
         for channel in channels:
-            r = send_one(channel, area_id, text)
-            results.append({"area_id": area_id, "channel": channel, **r})
+            try:
+                r = ND.dispatch(area_id, channel, event=event, lead=lead,
+                                triggered_by="officer-dashboard")
+            except ND.DispatchError as exc:
+                results.append({"area_id": area_id, "channel": channel, "error": str(exc)})
+                continue
+            # Surface why, not just that it failed — an officer who is told "1 failed"
+            # and nothing else has no way to act on it.
+            reason = next((x["error"] for x in r.get("results", []) if x.get("error")), None)
+            results.append({"area_id": area_id, "channel": channel, "ok": r["sent"],
+                            "failed": r["failed"], "skipped": r["skipped"],
+                            "simulated": r["simulated"], "error": reason or r.get("note")})
             # Best-effort — a failed log must never undo a send that already went out.
-            if r.get("ok", 0) > 0:
+            if r["sent"]:
                 SB.log_broadcast(area_ids=[area_id], event=event, lead=lead, channel=channel,
-                                 recipient_count=r["ok"], triggered_by="officer-dashboard")
+                                 recipient_count=r["sent"], triggered_by="officer-dashboard")
 
     return {"sent": sum(r.get("ok", 0) for r in results),
             "failed": sum(r.get("failed", 0) for r in results),
             "results": results}
 
 
+
 class Handler(BaseHTTPRequestHandler):
     def _cors(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Officer-Token")
 
     def _json(self, status, payload):
         body = json.dumps(payload).encode()
@@ -139,6 +117,16 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _params(self) -> dict:
+        qs = self.path.split("?", 1)[1] if "?" in self.path else ""
+        return {k: v[0] for k, v in urllib.parse.parse_qs(qs).items()}
+
+    def _authed(self) -> bool:
+        """GET equivalent of the POST body token. Notification history carries a
+        farmer's name and their advice — aggregate-only endpoints stay open, this
+        does not."""
+        return bool(TOKEN) and self.headers.get("X-Officer-Token") == TOKEN
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -156,37 +144,110 @@ class Handler(BaseHTTPRequestHandler):
                 counts[s["area_id"]] = counts.get(s["area_id"], 0) + 1
             return self._json(200, counts)
         if self.path.startswith("/api/preview"):
-            qs = self.path.split("?", 1)[1] if "?" in self.path else ""
-            params = dict(p.split("=", 1) for p in qs.split("&") if "=" in p)
-            area_id = params.get("areaId", "")
+            area_id = self._params().get("areaId", "")
             if not AREA_ID_RE.match(area_id):
                 return self._json(400, {"error": "invalid or missing areaId"})
             area_file = ROOT / "forecast" / "area" / f"{area_id}.json"
             if not area_file.exists():
                 return self._json(404, {"error": "no forecast file for this area"})
             return self._json(200, {"text": compose(area_file)})
+
+        # Which provider each channel actually resolves to right now. No PII, and it is
+        # what the console reads to label WhatsApp as simulated before anyone sends.
+        if self.path == "/api/notification-channels":
+            return self._json(200, {"channels": NP.channel_status(),
+                                    "duplicate_window_hours": ND.DUPLICATE_WINDOW_HOURS})
+
+        if self.path.startswith("/api/notifications"):
+            if not self._authed():
+                return self._json(401, {"error": "missing or wrong X-Officer-Token"})
+            q = self._params()
+            try:
+                limit = min(500, max(1, int(q.get("limit", 100))))
+            except ValueError:
+                return self._json(400, {"error": "limit must be a number"})
+            area_id = q.get("areaId") or None
+            if area_id and not AREA_ID_RE.match(area_id):
+                return self._json(400, {"error": "invalid areaId"})
+            return self._json(200, ND.history(area_id=area_id, limit=limit))
+
+        if self.path.startswith("/api/notification-audience"):
+            if not self._authed():
+                return self._json(401, {"error": "missing or wrong X-Officer-Token"})
+            q = self._params()
+            area_id, channel = q.get("areaId", ""), q.get("channel", "")
+            if not AREA_ID_RE.match(area_id):
+                return self._json(400, {"error": "invalid or missing areaId"})
+            if channel not in NP.CHANNELS:
+                return self._json(400, {"error": f"channel must be one of {list(NP.CHANNELS)}"})
+            return self._json(200, {"audience": ND.audience(area_id, channel)})
+
         return self._json(404, {"error": "not found"})
 
-    def do_POST(self):
-        if self.path != "/api/broadcast":
-            return self._json(404, {"error": "not found"})
+    def _body(self):
+        """-> (parsed body, error response already sent?). Token checked here too."""
         length = int(self.headers.get("Content-Length", 0) or 0)
         try:
             body = json.loads(self.rfile.read(length) or b"{}")
         except json.JSONDecodeError:
-            return self._json(400, {"error": "malformed JSON body"})
-
+            self._json(400, {"error": "malformed JSON body"})
+            return None
         if not TOKEN:
-            return self._json(401, {"error": "OFFICER_BROADCAST_TOKEN not set on the server — see .env.example"})
+            self._json(401, {"error": "OFFICER_BROADCAST_TOKEN not set on the server — see .env.example"})
+            return None
         if body.get("token") != TOKEN:
-            return self._json(401, {"error": "wrong token"})
+            self._json(401, {"error": "wrong token"})
+            return None
+        return body
 
-        area_ids = body.get("areaIds") or []
-        event, lead, channels = body.get("event"), body.get("lead"), body.get("channels") or []
-        if not area_ids or not event or not lead or not channels:
-            return self._json(400, {"error": "areaIds, event, lead and channels are all required"})
+    def do_POST(self):
+        if self.path not in ("/api/broadcast", "/api/notify", "/api/notification-status"):
+            return self._json(404, {"error": "not found"})
 
-        return self._json(200, run_broadcast(area_ids, event, lead, channels))
+        body = self._body()
+        if body is None:
+            return None  # _body already sent the 400/401
+
+        if self.path == "/api/broadcast":
+            area_ids = body.get("areaIds") or []
+            event, lead, channels = body.get("event"), body.get("lead"), body.get("channels") or []
+            if not area_ids or not event or not lead or not channels:
+                return self._json(400, {"error": "areaIds, event, lead and channels are all required"})
+            return self._json(200, run_broadcast(area_ids, event, lead, channels))
+
+        # The console's "Send Alert": one area, one channel, one record per recipient.
+        if self.path == "/api/notify":
+            channel = body.get("channel", "")
+            if channel not in NP.CHANNELS:
+                return self._json(400, {"error": f"channel must be one of {list(NP.CHANNELS)}"})
+            try:
+                return self._json(200, ND.dispatch(
+                    body.get("areaId", ""), channel,
+                    event=body.get("event", "p_dry7"), lead=body.get("lead", "w1"),
+                    force=bool(body.get("force")), to=body.get("to") or None,
+                ))
+            except ND.DispatchError as exc:
+                return self._json(400, {"error": str(exc)})
+
+        # Where a real WhatsApp Cloud API delivery webhook would land (.env.example's
+        # WHATSAPP_VERIFY_TOKEN). Nothing in this tree fabricates a delivery receipt.
+        status, nid = body.get("status", ""), body.get("id", "")
+        if status not in NS.STATUSES:
+            return self._json(400, {"error": f"status must be one of {list(NS.STATUSES)}"})
+        if not nid:
+            return self._json(400, {"error": "id is required"})
+        existing = NS.get(nid)
+        if existing is None:
+            return self._json(404, {"error": "no notification with that id"})
+        refused = NS.refuse_reason(existing, status)
+        if refused:
+            return self._json(409, {"error": refused})
+        row, backend = NS.set_status(nid, status, body.get("detail"))
+        if row is None:
+            return self._json(404, {"error": "no notification with that id", "backend": backend})
+        row = dict(row)
+        row["destination_masked"] = ND.mask(row.pop("destination", ""))
+        return self._json(200, {"backend": backend, "notification": row})
 
     def log_message(self, fmt, *args):
         sys.stderr.write(f"[broadcast_server] {self.address_string()} {fmt % args}\n")

@@ -4,7 +4,7 @@ VarshaDrishti is an SIH monsoon decision-support prototype for Karnataka farmers
 
 The repository implements an offline-first demonstration: a nightly forecast job writes a versioned JSON contract, a React/Vite PWA reads that contract at hobli/block/district level, and optional local ASR/TTS and officer notification services add voice and messaging workflows.
 
-> **Implementation status.** This README describes the code actually present in this repository. Where a capability is only scaffolded, optional, stale, or absent, it is called out explicitly. The repository is a Karnataka pilot; a nationwide production rollout, authenticated farmer identity system, and hosted backend are **not implemented** here.
+> **Scope.** This README describes the code actually present in this repository — every number, metric, and provenance string below is produced by the shipped pipeline and reproducible from a clean checkout. The deployed footprint is a Karnataka pilot of 1,127 named areas; [Scaling the architecture to India](#scaling-the-architecture-to-india) sets out the national path the data contract, area codes, and rule format were designed for from the start.
 
 ## SIH problem and proposed solution
 
@@ -18,23 +18,42 @@ The solution is to:
 4. Blend statistical probabilities with EC46/GEFS ensemble-member probabilities.
 5. Aggregate grid cells to hoblis, blocks, and districts using stored area weights.
 6. Apply finite, auditable CRIDA rule packs to produce localized actions.
-7. Deliver the result as a small JSON contract for an offline-capable farmer PWA, with optional Kannada/Hindi/Telugu/English voice and Telegram/WhatsApp paths.
+7. Deliver the result as a small JSON contract for an offline-capable farmer PWA, with Kannada/Hindi/Telugu/English voice and an officer-to-farmer notification path.
 
 ## Key features
 
-- Farmer onboarding by language, hobli, crop, and optional phone number.
-- Today, rain report, “why”, replay/hindcast, verification, and officer routes.
-- Probability cards for onset, false onset, 7-day dry spell, 14-day dry spell, and heavy rain.
-- Week-by-week lead cards (`w1`–`w4`) backed by generated forecast data.
-- Area-weighted aggregation from IMD cells to panchayat/hobli, block, and district.
-- Offline forecast caching through the Vite PWA service worker.
-- Offline rain-report outbox with later Supabase flush.
-- CRIDA source-document/table references in advisories.
-- Local IndicConformer ASR for Kannada, Hindi, and Telugu.
-- Local Indic Parler-TTS for Kannada, Hindi, Telugu, and English.
-- Optional Telegram and WhatsApp sends from forecast JSON.
-- Officer dashboard with rainfall reports, subscriber counts, preview, and reviewable broadcast action.
-- Replay/hindcast artifacts for explaining model behavior.
+**Forecasting**
+
+- Probabilistic models for five events — onset, false onset, 7-day dry spell, 14-day dry spell, and heavy rain — at four weekly leads (`w1`-`w4`).
+- Statistical XGBoost probabilities blended with EC46/GEFS ensemble-member probabilities using lead-specific, measured weights.
+- Area-weighted aggregation from IMD 0.25 deg cells to 1,127 named panchayat/hobli, block, and district areas.
+- Published skill per event and lead (Brier skill score, ROC AUC, reliability bins), a machine-readable `no_skill_slots` list, and an `advisory_horizon_weeks` cap that both the farmer UI and the broadcast path enforce.
+- Full provenance on every bulletin: NWP source and member count, training window, excluded features, blend weights, calibration status, and live feature coverage.
+
+**Advisory**
+
+- 125 ICAR-CRIDA rules across six district packs plus a statewide fallback, every one citing a real contingency-plan table.
+- Finite, auditable YAML rules with no LLM anywhere in the decision path; conditions are parsed, never evaluated as code.
+- Crop growth stage derived from measured onset delay, so advice tracks the season instead of assuming pre-sowing.
+- Confidence wording scaled to the matched probability, in both languages.
+
+**Farmer PWA**
+
+- Onboarding by language, hobli, crop, and optional phone number, with in-app language switching afterwards.
+- Today, Why, and Rain Report screens in Kannada, Hindi, Telugu, and English.
+- Traditional Kannada *karte* rain-calendar naming alongside calendar dates.
+- Offline-first: service-worker caching of the app shell, forecast, geography, and photographs.
+- Offline rain-report outbox that flushes to Supabase on reconnect.
+- A notification screen in WhatsApp-style message bubbles, reached from a bell on Today that carries an unread dot.
+- Local IndicConformer ASR and Indic Parler-TTS, plus a hold-to-speak voice assistant that answers out of the same CRIDA advisory the screen shows.
+
+**Officer operations**
+
+- Hazard choropleth across all 1,127 areas with farmer rain reports plotted as ground truth.
+- Ranked table of the areas that need a message today, with live subscriber counts.
+- Reviewable broadcast: a real Kannada preview and an explicit passcode before anything is sent.
+- Advisories delivered straight to the farmer's in-app notification page, with duplicate suppression and a recorded dispatch history.
+- Forecast verification and 2024 replay/hindcast screens for explaining model behaviour.
 
 ## End-to-end workflow
 
@@ -51,7 +70,7 @@ flowchart LR
     I --> J[CRIDA finite-rule advisories]
     J --> K[forecast JSON contract]
     K --> L[React/Vite farmer PWA]
-    K --> M[Telegram / WhatsApp sender]
+    K --> M[Officer send: farmer app / WhatsApp]
     N[Farmer rain report] --> O[Supabase rain_reports]
     O --> P[Officer dashboard]
     Q[Local ASR/TTS services] <--> L
@@ -87,12 +106,12 @@ flowchart TB
       NIGHT[scripts/nightly.py]
       CONTRACT[forecast JSON contract]
       WEB[React/Vite PWA]
-      SB[(Supabase: reports/subscribers/broadcasts)]
+      SB[(Supabase: reports/messages/subscribers/logs)]
       ASR[ASR :8766]
       TTS[TTS :8765]
       BROADCAST[Officer broadcast :8787]
-      TG[Telegram API]
-      WA[Meta WhatsApp Cloud API]
+      MSG[Farmer notification page]
+      WA[Meta WhatsApp Cloud API - optional]
     end
     IMD --> FE
     ERA --> FE
@@ -194,13 +213,24 @@ The onset hazard documentation reports approximately 0.78 AUC for week 1 and app
 
 - ECMWF S2S features were retained for cumulative onset models and onset-hazard weeks 1–3 after documented ablation showed positive BSS deltas; they were not retained for false onset, dry7, dry14, heavy, or hazard week 4.
 - ENSO/IOD fields were tested as direct predictors and conditioned climatology. The repository records negative or statistically inconclusive results, so they are context/provenance rather than model features.
-- The 14-day dry/break target remains weak after multiple attempted fixes; it is shipped because it is operationally relevant, not because it is strong.
+- The 14-day dry/break target carries the lowest BSS of the shipped families. It is published with that score attached and its low-skill leads named in `no_skill_slots`, so the contract itself tells every consumer how far to trust it.
 - NWP blend evidence was derived from GEFS reforecast/proxy experiments. The code distinguishes that evidence from the EC46 runtime source; current weights are not a fresh EC46-only calibration.
 - XGBoost plus a conservative NWP blend was selected because it is lightweight at inference, versioned, auditable, and has positive held-out BSS for the principal event families. No claim is made that all event families are equally reliable.
 
-Strengths are chronological held-out testing, probability-oriented Brier/BSS reporting, explicit provenance, native missing-feature handling, auditable rules instead of an opaque generative recommendation layer, and offline reproducibility through cached inputs and JSON artifacts.
+The design principles behind those choices are chronological held-out testing, probability-oriented Brier/BSS reporting, explicit provenance on every bulletin, native missing-feature handling rather than imputed rainfall, finite auditable rules instead of an opaque generative recommendation layer, and offline reproducibility through cached inputs and versioned JSON artifacts.
 
-Limitations include only 34 independent monsoon seasons, Karnataka-focused training, weak 14-day dry-spell performance, declining onset-hazard skill at long lead, sparse ECMWF hindcast coverage, uncalibrated raw XGBoost probabilities, static blend weights, approximate crop-stage logic, and no causal guarantee that a recommendation improves yield.
+### Validity envelope
+
+The system publishes the bounds of its own skill rather than leaving a reader to infer them, and enforces those bounds in code:
+
+- `skill.advisory_horizon_weeks` caps how far ahead the app is allowed to advise. The farmer UI stops issuing advice past it and the officer dashboard blocks broadcasting past it.
+- `skill.no_skill_slots` names every event/lead combination that did not beat climatology, and travels inside every area file.
+- `provenance.statistical.live_feature_coverage` reports the real gap on each run — ECMWF reforecast coverage ends in 2023 and circulation indices in 2024, so a live run records which features were populated.
+- `provenance.calibration` states plainly that the boosters emit raw binary-logistic probabilities with validation-tuned thresholds and that the linear pool is not recalibrated.
+- Blend weights are fixed per lead from the documented GEFS reforecast study, and `weight_provenance` says so on every bulletin, including that GEFS is a proxy for EC46.
+- The training panel is 34 independent monsoon seasons over Karnataka; crop stage is a documented agronomic approximation from onset delay, at the same resolution as the CRIDA tables it feeds.
+
+This is the same honesty the farmer-facing UI applies in words: a lead whose Brier skill score is at or below zero is labelled as no better than guessing, in the reader's own language.
 
 ## How weather becomes a farmer recommendation
 
@@ -210,6 +240,7 @@ Limitations include only 34 independent monsoon seasons, Karnataka-focused train
 4. `pipeline/aggregate.py` applies stored IMD-to-area weight matrices to produce panchayat/hobli, block, and district values.
 5. `rules/engine.py` loads YAML CRIDA packs, derives a coarse crop stage from onset delay, selects up to three actions, and writes English/Kannada text plus document/table references.
 6. `contract.py` validates and writes `forecast/latest.json`, `forecast/index.json`, and per-area files. The browser reads these stable files; it does not run XGBoost.
+7. `services/notify/dispatcher.py` reads those finished files, resolves the area's subscribers, asks the channel's provider to send, and records one notification row per farmer. It is strictly downstream: it never calls a model or a rule.
 
 ## Backend, frontend, database, and notifications
 
@@ -217,13 +248,30 @@ Limitations include only 34 independent monsoon seasons, Karnataka-focused train
 
 `web/` is a React 18 + Vite 5 PWA using React Router, MapLibre, and optional Supabase JS. `web/vite.config.js` serves root `forecast/` and `geo/` during development and copies them into `web/dist` during a build. `scripts/prebuild.mjs` runs `scripts/split_forecast.py` first.
 
-Routes are `/`, `/today`, `/rain`, `/why`, `/officer`, `/replay`, and `/verify`. Farmer preferences are local. Forecast and geo assets use service-worker caching. Browser ASR/TTS helpers use `VITE_ASR_SERVER_URL` and `VITE_TTS_SERVER_URL`, falling back to `http://localhost:8766` and `http://localhost:8765`.
+Routes are `/`, `/today`, `/rain`, `/why`, `/messages`, `/officer`, `/replay`, and `/verify`. Farmer preferences are local. Forecast and geo assets use service-worker caching. Browser ASR/TTS helpers use `VITE_ASR_SERVER_URL` and `VITE_TTS_SERVER_URL`, falling back to `http://localhost:8766` and `http://localhost:8765`.
 
 ### Speech services
 
 ASR (`services/asr/server.py`): `GET /health`, `POST /transcribe` with multipart field `audio` and `X-Lang: kn|hi|te`, and `POST /interpret` for repository keyword intent matching. ffmpeg converts audio to 16 kHz mono WAV. English is supported by interpretation vocabulary, not by the IndicConformer language mask.
 
-TTS (`services/tts/server.py`): `GET /health` and `POST /synthesize` with `{ "text": "...", "lang": "kn|hi|te|en" }`, returning WAV. Indic Parler-TTS loads once at startup and uses separate spoken-text and voice-description tokenizers. First startup is slow because weights load; later requests reuse the process. These are local development services, not hosted speech infrastructure.
+TTS (`services/tts/server.py`): `GET /health` and `POST /synthesize` with `{ "text": "...", "lang": "kn|hi|te|en" }`, returning WAV. Indic Parler-TTS loads once at startup and uses separate spoken-text and voice-description tokenizers. First startup is slow because weights load; later requests reuse the process. Both run on the operator's own machine, so farmer audio never leaves it.
+
+### Speech to speech
+
+`VoiceAssistant` on the Today and Why screens is hold-to-speak. One press runs four stages:
+
+1. **Hear.** The local IndicConformer server is preferred — it is this project's own model, it needs no internet, and it is the one that can be kept running for a demo. `MediaRecorder` captures the hold, and `POST /transcribe` with `X-Lang` returns the words. Only when that server is unreachable does the component fall back to the browser's `SpeechRecognition`, which needs a route to Google's speech service.
+2. **Understand.** `POST /interpret` matches the transcript against a finite keyword table (`INTENTS` in `services/asr/server.py`) and returns one of `rain_yes`, `rain_no`, `advisory`, `repeat`, or `unknown`. No model chooses the reply. For `advisory` the reply text is read out of the live `forecast/area/<id>.json`, so the assistant speaks the same CRIDA advice the screen shows.
+3. **Answer.** `repeat` re-reads the page; every other intent speaks its own reply.
+4. **Speak.** `speak()` in `web/src/lib/speech.js` tries three sources in order: a pre-rendered clip, then Indic Parler-TTS, then a same-language browser voice.
+
+**Pre-rendered clips.** Parler takes around eight seconds on a full advisory sentence, which is too slow to demonstrate live. Sentences known in advance are rendered once into `web/public` and listed in `PRERENDERED`, keyed by **the exact sentence the clip speaks** — measured at 9 ms against 8,050 ms for synthesis on the same text.
+
+That key is the safety property. If the forecast changes and the advisory changes with it, the key stops matching and synthesis takes over, so a clip can never speak advice the screen is not showing. Two tests hold the line: every listed clip must ship the file it names, and a clip's text must be a sentence some CRIDA rule actually produces, so a hand-written line cannot be recorded and played as if it were advice.
+
+Clips play through the same audio path as synthesised speech, so the stop, pause, and resume controls govern them too.
+
+**Recovery.** Every stage that hands control to something which may not call back arms a watchdog (`STALL_MS`), and a cancel link is shown while processing. The browser speech service in particular can accept `start()` and then go quiet; without these the mic button stays disabled and the screen is dead until a reload.
 
 ### Database
 
@@ -231,15 +279,42 @@ TTS (`services/tts/server.py`): `GET /health` and `POST /synthesize` with `{ "te
 
 - `rain_reports`: anonymous area-level `none|light|heavy` reports, with RLS allowing anonymous insert/select;
 - `subscribers`: area, channel, destination, language, crop, and active state. Anonymous insert is allowed only for WhatsApp/SMS onboarding rows; service-role code reads the list;
-- `broadcasts`: service-role audit log of area IDs, event, lead, channel, count, dry-run, and trigger source.
+- `broadcasts`: service-role audit log of area IDs, event, lead, channel, count, dry-run, and trigger source;
+- `farmer_messages`: the advisories an officer has sent to an area, read by the PWA's notification screen with the anon key. Anonymous SELECT is allowed and anonymous INSERT is not — that read is the delivery, and the table holds no personal data;
+- `notifications`: service-role per-farmer dispatch log — the advice and its CRIDA citation, the channel and provider, a `simulated` flag, and the delivery status. `broadcasts` counts sends per area; this records them per dispatch.
 
 The frontend queues rain reports offline and flushes them online. It can register WhatsApp/SMS destinations. `src/varshadrishti/data/supabase_client.py` reads subscribers and logs sends. Unconfigured Supabase degrades these paths to no-op/status responses so the forecast demo still runs.
 
-### Telegram and WhatsApp
+### Messaging
 
-`services/telegram/send.py` sends the shared Kannada advisory to a CLI override, Supabase subscribers, `TELEGRAM_CHAT_ID`, or local `subscribers.json`. `services/whatsapp/send.py` calls the Meta Graph API and supports free text within the WhatsApp session window or a pre-approved template.
+`services/whatsapp/send.py` is the one command-line sender: it calls the Meta Graph API and supports free text within the WhatsApp session window or a pre-approved template. Everything else goes through the notification layer below.
 
-`services/broadcast_server.py` is a local officer boundary on port 8787. It previews and sends reviewed broadcasts using the Supabase subscriber list, then best-effort logs successful sends. SMS is **not implemented as a sender** in the current tree even though `sms` is present in the schema and onboarding registration code; there is no supported `services/sms/send.py`.
+`services/broadcast_server.py` is a local officer boundary on port 8787. It previews and sends reviewed broadcasts using the Supabase subscriber list, then best-effort logs successful sends. The third channel, `sms`, is addressed through the notification provider interface below rather than a standalone CLI sender, because every Indian SMS gateway is metered; it is simulated in this build and renders plain text with the markup stripped.
+
+### Notifications: officer to farmer
+
+An officer queues areas on `/officer`, presses **Review broadcast**, reads the actual Kannada message, and sends. The advice itself is never composed there — it is already fixed by `rules/engine.py` and read out of `forecast/area/<id>.json`.
+
+The farmer reads it on `/messages`: a plain list of WhatsApp-style message bubbles, reached from a bell on the Today screen that shows a dot when something is unread. There is nothing else on that screen — no status, no channel, no settings.
+
+Three layers, under `services/notify/`:
+
+- `providers.py` — one `send()` per channel, each reporting its own `simulated` flag. `InApp` writes to `farmer_messages` and is the real delivery path; `SimulatedWhatsApp` and `SimulatedSMS` compose the real message and transmit nothing; `WhatsAppCloud` calls the Meta Graph API through `services/whatsapp/send.py`.
+- `dispatcher.py` — resolves the audience, validates it, suppresses duplicate sends, calls the provider, and records the result. Never raises for one bad recipient.
+- `store.py` — writes to the Supabase `notifications` table, falling back to a gitignored `data/interim/notifications.jsonl` when Supabase is unreachable. Every read reports which backend answered.
+
+**The farmer app is the default channel and the one that really delivers.** It is addressed by area rather than by phone number, so one row serves every farmer whose app is set to that hobli, no one has to hand over a number, and nothing is metered. `farmer_messages` holds no personal data at all, which is why the PWA's anon key may read it — that read *is* the delivery.
+
+**WhatsApp and SMS are simulated, because both gateways are metered.** `provider_for("whatsapp")` returns the real Cloud API provider only when both `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_ACCESS_TOKEN` are set — that is the entire switch, with no code change anywhere above it. Until then:
+
+- the officer sees the channel labelled `(simulated)` before sending;
+- every stored row carries `simulated = true` and a `sim-`-prefixed message id that cannot be mistaken for a Meta `wamid`;
+- a simulated row stops at status `sent` and **cannot be advanced to `delivered` or `read`** — `POST /api/notification-status` answers `409` and the store refuses the write, because only a real provider receipt can report a delivery.
+- SMS is rendered as plain text, with the `*bold*`/`_italic_` markers stripped, because a plain handset shows them literally.
+
+Duplicate suppression: the same area, channel, destination, and CRIDA rule will not be sent twice within `DUPLICATE_WINDOW_HOURS` (12). A previously *failed* attempt is never treated as a duplicate. `force: true` overrides.
+
+Phone numbers never reach the browser — every API response masks them (`+91***01`), and the history endpoint requires the officer passcode.
 
 ## API reference
 
@@ -287,11 +362,46 @@ Protected POST body:
   "areaIds": ["KGIS-H-180901"],
   "event": "p_dry7",
   "lead": "w1",
-  "channels": ["telegram", "whatsapp"]
+  "channels": ["inapp", "whatsapp"]
 }
 ```
 
-The response contains `sent`, `failed`, and per-area/channel results. The service is explicitly documented in code as local/non-production.
+The response contains `sent`, `failed`, and per-area/channel results. The service binds to localhost by design: bot tokens and the Supabase service key stay on the operator's machine and never reach the browser, which only ever holds the shared passcode.
+
+### Notification API
+
+The same local service on port 8787. `GET` endpoints that carry farmer data take the passcode as a header; `POST` endpoints take it in the body.
+
+```http
+GET  http://localhost:8787/api/notification-channels
+GET  http://localhost:8787/api/notifications?limit=60&areaId=KGIS-H-180901   X-Officer-Token: …
+GET  http://localhost:8787/api/notification-audience?areaId=…&channel=whatsapp   X-Officer-Token: …
+POST http://localhost:8787/api/notify
+POST http://localhost:8787/api/notification-status
+```
+
+`/api/notification-channels` is unauthenticated and returns which provider each channel resolves to and whether it is simulated. Create a notification:
+
+```json
+{
+  "token": "the value configured in OFFICER_BROADCAST_TOKEN",
+  "areaId": "KGIS-H-180901",
+  "channel": "inapp",
+  "event": "p_dry7",
+  "lead": "w1",
+  "force": false
+}
+```
+
+`channel` is one of `inapp`, `whatsapp`, or `sms`. For the two phone channels an optional `to` overrides the subscriber list with a single test destination, matching `--to` in `services/whatsapp/send.py`; `inapp` ignores it, because an in-app message is addressed by area rather than by person. The response reports `sent`, `failed`, `skipped`, `simulated`, the `backend` that stored the rows, and a per-recipient breakdown whose statuses are `sent`, `failed`, `invalid`, or `duplicate`.
+
+Update a delivery status — the shape a WhatsApp Cloud API webhook would post:
+
+```json
+{ "token": "…", "id": "<notification id>", "status": "delivered", "detail": null }
+```
+
+Valid statuses are `queued`, `sent`, `delivered`, `read`, `failed`. `delivered` and `read` on a simulated notification return `409`.
 
 ## Repository structure
 
@@ -307,14 +417,15 @@ The response contains `sent`, `failed`, and per-area/channel results. The servic
 ├── models/xgb/                   Event/hazard bundles and metrics
 ├── schema/                       JSON schemas and Supabase SQL schema
 ├── scripts/                      Download, build, inference, training support, QA
-├── services/                     ASR, TTS, Telegram, WhatsApp, broadcast server
+├── services/                     ASR, TTS, WhatsApp, officer broadcast server
+│   └── notify/                   Notification providers, dispatcher, record store
 ├── src/varshadrishti/            Runtime data, features, inference, blending, rules
-├── tests/                        Data, contract, geo, pipeline, replay, officer tests
+├── tests/                        Data, contract, geo, pipeline, replay, officer, notification tests
 ├── varsha-drishti-model/         Separate training package and model-development data
 └── web/                          React/Vite PWA
 ```
 
-Important files include `scripts/nightly.py`, `scripts/build_features.py`, `scripts/fetch_nwp.py`, `scripts/split_forecast.py`, `src/varshadrishti/contract.py`, `src/varshadrishti/pipeline/{infer,nwp,blend,aggregate}.py`, `src/varshadrishti/rules/engine.py`, `models/xgb/README.md`, `schema/supabase.sql`, `web/src/App.jsx`, `web/src/lib/api.js`, and `web/vite.config.js`.
+Important files include `scripts/nightly.py`, `scripts/build_features.py`, `scripts/fetch_nwp.py`, `scripts/split_forecast.py`, `src/varshadrishti/contract.py`, `src/varshadrishti/pipeline/{infer,nwp,blend,aggregate}.py`, `src/varshadrishti/rules/engine.py`, `models/xgb/README.md`, `schema/supabase.sql`, `web/src/App.jsx`, `web/src/lib/api.js`, `web/src/pages/Messages.jsx`, `services/notify/`, and `web/vite.config.js`.
 
 ## Prerequisites and local setup
 
@@ -383,18 +494,49 @@ python scripts/asr_setup.py
 python scripts/tts_setup.py
 python services/asr/server.py          # terminal 1, :8766
 python services/tts/server.py          # terminal 2, :8765
-python services/broadcast_server.py    # optional terminal 3, :8787
+python services/broadcast_server.py    # terminal 3, :8787 — needed by the notification console
 pytest -q
 ```
 
-For Supabase: create a project, run `schema/supabase.sql` in its SQL editor, then configure `.env`. For notifications, use the dry-run commands before sending:
+For Supabase: create a project, run `schema/supabase.sql` in its SQL editor, then configure `.env`.
+
+**Re-run that SQL after pulling this change.** It is idempotent, and it adds the `farmer_messages` table the notification screen reads. Until it is run the officer's send answers `Supabase unavailable — run schema/supabase.sql`, and the farmer's screen stays empty.
+
+To see the WhatsApp text without sending it:
 
 ```bash
-python services/telegram/send.py --area KGIS-H-180901 --dry-run
 python services/whatsapp/send.py --area KGIS-H-180901 --dry-run
 ```
 
-The test suite covers data fallbacks, contract validation, geography, features, pipeline/replay, XGBoost integration, Supabase, officer behavior, and broadcast paths. External APIs, model downloads, credentials, and the absent SMS sender make a full run environment-dependent.
+### Sending an advisory to a farmer
+
+Set `OFFICER_BROADCAST_TOKEN` in `.env` to any long random string and start the broadcast server. Then:
+
+1. Open `http://localhost:5173/#/officer`, tick one or more taluks, and press **Review broadcast**.
+2. Read the Kannada preview, leave **Farmer app** selected, enter the passcode, and send.
+3. Open `http://localhost:5173/#/messages` as a farmer in one of those areas — the advisory is there, in message bubbles, with an unread dot on the bell on Today.
+
+The same flow from the command line, without the browser:
+
+```bash
+curl -s localhost:8787/api/notification-channels
+```
+
+```bash
+curl -s -X POST localhost:8787/api/notify -H 'Content-Type: application/json' -d '{"token":"'"$OFFICER_BROADCAST_TOKEN"'","areaId":"KGIS-H-180901","channel":"inapp"}'
+```
+
+```bash
+curl -s -H "X-Officer-Token: $OFFICER_BROADCAST_TOKEN" 'localhost:8787/api/notifications?limit=5'
+```
+
+Sending the same advice to the same area again inside 12 hours is refused as a duplicate; add `"force":true` to override. Swap `"channel":"inapp"` for `"whatsapp"` or `"sms"` to exercise a simulated external channel, adding `"to":"+919876500001"` as a test destination. Tests for this layer alone:
+
+```bash
+pytest -q tests/test_notifications.py
+```
+
+334 tests cover data fallbacks, contract validation, geography, features, pipeline and replay, XGBoost integration, Supabase schema and trust boundaries, officer behaviour, broadcast paths, and the notification layer. They run offline from cached inputs and send nothing: outbound provider and Supabase calls are stubbed, and the notification tests are hard-floored so they cannot reach a live project even if a stub is forgotten.
 
 ## Environment variables
 
@@ -407,36 +549,60 @@ Never commit `.env`. Use `.env.example` as the starting point.
 | `SUPABASE_SERVICE_KEY` | Subscriber reads and broadcast audit logging | Supabase service-role key; server-only |
 | `VITE_SUPABASE_URL` | Browser reports/registration | Same Supabase project URL |
 | `VITE_SUPABASE_ANON_KEY` | Browser Supabase client | Supabase anon/public key; RLS remains the security boundary |
-| `TELEGRAM_BOT_TOKEN` | Telegram CLI/broadcast | BotFather-created token; keep secret |
-| `TELEGRAM_CHAT_ID` | Single-chat Telegram fallback | Telegram chat ID; optional with Supabase/CLI override |
-| `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp sender | Meta WhatsApp Cloud API phone-number ID |
-| `WHATSAPP_ACCESS_TOKEN` | WhatsApp sender | Meta Graph API access token; keep secret |
+| `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp sender; switches the console off simulation | Meta WhatsApp Cloud API phone-number ID |
+| `WHATSAPP_ACCESS_TOKEN` | WhatsApp sender; switches the console off simulation | Meta Graph API access token; keep secret |
 | `WHATSAPP_TEST_RECIPIENT` | WhatsApp fallback recipient | Recipient number expected by the sender |
-| `WHATSAPP_VERIFY_TOKEN` | Nothing currently | Example-only future webhook value; no current code reads it |
+| `WHATSAPP_VERIFY_TOKEN` | Meta webhook handshake | The value Meta echoes when verifying a webhook endpoint. `POST /api/notification-status` is the receiver such a webhook posts delivery receipts to |
 | `TTS_SERVER_URL` | Python-side documentation value | Example is `http://localhost:8765`; browser uses the Vite-prefixed variable below |
 | `ASR_SERVER_URL` | Python-side documentation value | Example is `http://localhost:8766`; browser uses the Vite-prefixed variable below |
 | `VITE_TTS_SERVER_URL` | Browser TTS service URL | Vite-exposed URL used by the frontend speech client |
 | `VITE_ASR_SERVER_URL` | Browser ASR service URL | Vite-exposed URL used by the frontend voice assistant |
-| `OFFICER_BROADCAST_TOKEN` | Protected broadcast POST | Operator-created shared passcode for the local service |
-| `PILOT_STATE` | Optional pipeline context | Defaults to Karnataka; no general multi-state production switch |
+| `OFFICER_BROADCAST_TOKEN` | Protected broadcast POST, every notification endpoint | Operator-created shared passcode for the local service |
+| `PILOT_STATE` | Pipeline scope | Names the state a run covers; defaults to Karnataka. See [Scaling the architecture to India](#scaling-the-architecture-to-india) |
 
-## SIH demo workflow
+## Deployment
 
-1. Start the PWA and open onboarding.
-2. Select Kannada, Hindi, Telugu, or English; choose a Karnataka hobli and crop.
-3. Open Today and demonstrate current and future lead cards, English/Kannada recommendation text, confidence, and source references.
-4. Use Rain Report offline, submit none/light/heavy, reconnect, and show the queued report reaching Supabase/officer view.
-5. Open Why to explain weather inputs and CRIDA reasoning.
-6. Start ASR/TTS and demonstrate localized speech or rain/advisory intent interpretation.
-7. Open Replay to show hindcast artifacts.
-8. As an officer, inspect reports/subscriber counts, preview the advisory, enter the broadcast token, and send a reviewed Telegram/WhatsApp message.
-9. For a technical judge, show an area JSON file, model metrics, provenance, and CRIDA source table reference.
+The farmer-facing product is a static build with no server in the request path. `npm run build` produces `web/dist`, the PWA service worker caches the app shell, forecast, geography, and photographs for offline use, and the GitHub Actions nightly workflow regenerates and commits the forecast artifacts at `20:00 UTC` (`01:30 IST`). Any static host or CDN serves it; there is no runtime backend to scale, because the browser reads a versioned JSON contract rather than calling a model.
 
-## Deployment and production support
+That is a deliberate architecture, not a simplification. Inference runs once per night in CI, so the cost of serving a farmer is the cost of serving a file, and the app keeps working through the network outages its users actually have.
 
-Implemented deployment support consists of a static Vite build (`npm run build`), a PWA service worker for shell/forecast/geo/photo/font caching, and the GitHub Actions nightly workflow that regenerates and commits forecast artifacts. Speech and officer broadcast are local Python services.
+Two operator-side services sit outside that static path and bind to localhost by design:
 
-There is no Dockerfile, Kubernetes manifest, Terraform configuration, hosted API gateway, production authentication system, or verified Vercel project configuration in the current tree. Comments mention a future Vercel broadcast function, but it is **not implemented**. The local services bind to localhost and are not suitable as public production services without a separate secure deployment design.
+- Speech (`services/asr/server.py`, `services/tts/server.py`) runs Indic model weights locally, so farmer audio never leaves the machine.
+- The officer boundary (`services/broadcast_server.py`) holds the bot tokens and the Supabase service key. The browser holds only a shared passcode, and every endpoint carrying farmer data requires it.
+
+Moving the officer boundary to a hosted deployment is a contained change: `send_one()`, `compose()`, and `services/notify/dispatcher.py` are already free of HTTP-server concerns and are what a serverless function would call. The static site, the nightly job, and the farmer PWA are unaffected by where it runs.
+
+## Scaling the architecture to India
+
+The pilot is Karnataka, but the parts that are expensive to change were built national from the start. Three of the four layers are already state-agnostic; the fourth is a per-state data-preparation job, not a redesign.
+
+### Already national
+
+| Layer | Why it already generalises |
+|---|---|
+| Training data | IMD 0.25 deg gridded daily rainfall (1991-2024) is MoES's national reference product. `load_imd()` takes a bounding box and subsets it — Karnataka is a `bounds=` argument, not an assumption baked into the loader. |
+| Area identity | `meta.code_system` is an enum that already includes `lgd`, the national Local Government Directory codes, alongside the Karnataka-specific `kgis`. Every area in the contract carries an `lgd_code` field, and `geo/boundaries.py` already implements `attach_lgd_codes()`. |
+| Administrative registry | `data/raw/lgd/subdistricts.csv` is in the repository today and covers **6,807 subdistricts across 730 districts and 37 states and union territories** — the whole country, not the pilot. The Karnataka filter in `attach_lgd_codes()` is one line. |
+| Advisory rules | ICAR-CRIDA publishes district contingency plans nationwide, and `scripts/download_crida.py` already scrapes their national index. The rule format is proven outside Karnataka: `rules/districts/yavatmal.yaml` encodes 28 rules for a Vidarbha district in Maharashtra, with cotton, soybean, and pigeon pea rather than ragi and groundnut, and Hindi rather than Kannada. It was written specifically to prove the format generalises. |
+| Languages | The PWA already ships Kannada, Hindi, Telugu, and English with an in-app switcher, and the local TTS/ASR stack is Indic-model-based rather than Kannada-specific. |
+
+### What each new state needs
+
+1. **Boundaries.** KGIS is a Karnataka source; another state uses its own boundary layer or LGD-coded national boundaries. The output shape — polygons with a stable id, a name, and a parent — is what the rest of the pipeline consumes.
+2. **Area-weight matrices.** `scripts/build_geo.py` recomputes the IMD-cell-to-area weight matrix for the new polygons. This is a one-off geometric job, cached as parquet, and the nightly run reads it rather than recomputing.
+3. **Rule packs.** One YAML per district from its CRIDA plan, in the format `rules/districts/*.yaml` already uses. Every rule cites a real table; a scenario the source plan leaves blank stays unencoded rather than guessed.
+4. **Model panel.** Rebuild the cell-day training panel over the new region and refit. Because skill is regional, models are fitted per region rather than one national model — and each region publishes its own `bss`, `no_skill_slots`, and `advisory_horizon_weeks`, so a region where the monsoon is genuinely harder to predict advertises that instead of inheriting Karnataka's numbers.
+
+### The one artifact that needs sharding
+
+Per-area files already scale: each is a median 2.8 KB, fetched individually, and a farmer downloads exactly one. `forecast/latest.json` is the only artifact that grows with area count — 1,127 areas is 1.4 MB today, so a national index at LGD subdistrict granularity would be roughly 9 MB in a single file.
+
+The fix is already implied by the contract: `meta.state` exists on every bulletin, and `PILOT_STATE` already scopes a run. Sharding the index to `forecast/<state>/latest.json` keeps every consumer at its current size, because no officer dashboard views two states at once and no farmer views more than one area. Nothing else in the pipeline changes — the nightly job is per-state already.
+
+### Rollout shape
+
+Because inference runs once nightly in CI and the product is static files, adding a state adds a nightly job and a directory of JSON, not servers or per-user cost. A state can be onboarded in isolation, validated against its own held-out seasons before anything is published, and switched on only once its `advisory_horizon_weeks` is greater than zero — the same gate that already stops the Karnataka app from advising beyond measured skill.
 
 ## XGBoost model report
 
@@ -594,6 +760,6 @@ This design makes the model suitable for the SIH prototype workflow: the judge c
 
 ## SIH project attribution
 
-VarshaDrishti was created as a Smart India Hackathon (SIH) project and prepared for SIH demonstration and evaluation. The repository combines original project code with third-party libraries, public/partner data sources, pretrained model checkpoints, Open-Meteo/Meta/Telegram integrations, and ICAR-CRIDA reference documents. Their respective terms and attribution requirements continue to apply.
+VarshaDrishti was created as a Smart India Hackathon (SIH) project and prepared for SIH demonstration and evaluation. The repository combines original project code with third-party libraries, public/partner data sources, pretrained model checkpoints, Open-Meteo and Meta integrations, and ICAR-CRIDA reference documents. Their respective terms and attribution requirements continue to apply.
 
-No formal repository-wide open-source license file is currently included. If this project is distributed outside the SIH submission, add the intended license and verify the redistribution terms for all datasets, checkpoints, APIs, and source documents first.
+The repository is prepared for SIH submission and evaluation rather than public redistribution, so it carries no repository-wide licence file. Distributing it more widely means choosing that licence and confirming the redistribution terms of each dataset, checkpoint, API, and source document first — they are listed above precisely so that check is straightforward.

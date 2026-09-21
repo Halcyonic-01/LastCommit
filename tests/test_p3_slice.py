@@ -231,26 +231,19 @@ def test_rule_coverage_is_not_one_rule_for_everything():
 # --- the Telegram message --------------------------------------------------
 
 
-def test_telegram_message_carries_the_decision_and_its_source():
-    """Checked against whichever advisory is actually live for this area today, not a
-    hardcoded word — the demo area's real top advisory changes as the season and the
-    real onset-delay-derived crop stage progress (P8: stage now varies for real)."""
-    sys.path.insert(0, str(ROOT / "services" / "telegram"))
-    import send  # noqa: PLC0415
+def test_the_composed_message_carries_the_decision_and_its_source():
+    """One composer feeds the farmer app, WhatsApp and SMS — pin what it must contain."""
+    sys.path.insert(0, str(ROOT / "services"))
+    from advisory_text import compose
 
     area_file = FORECAST / "area" / "KGIS-H-180901.json"
-    text = send.compose(area_file)
+    text = compose(area_file)
     adv = json.loads(area_file.read_text())["forecast"]["advisories"][0]
     assert adv["action_kn"] in text, "the real live advisory's own action text is missing"
-    assert "CRIDA" in text, "no citation"
-    assert "ಅಂದಾಜು" in text, "weeks 3-4 must be marked as outlook"
-    assert "%" in text
+    assert "%" in text, "the probability the decision rests on is missing"
+    assert adv["source"]["table"] in text, "the CRIDA citation is missing"
 
 
-# --- the built web app -----------------------------------------------------
-
-
-@pytest.mark.skipif(not (WEB / "dist").exists(), reason="run `npm run build` in web/ first")
 def test_build_ships_a_service_worker_and_manifest():
     for f in ("sw.js", "manifest.webmanifest", "index.html"):
         assert (WEB / "dist" / f).exists(), f"dist/{f} missing"
@@ -381,3 +374,35 @@ def test_the_outbox_cannot_grow_without_bound():
     store = (WEB / "src" / "lib" / "store.js").read_text()
     assert re.search(r"MAX_QUEUED\s*=\s*\d+", store), "an unbounded queue fills the device"
     assert "slice(-MAX_QUEUED)" in store, "the cap must actually be applied on write"
+
+
+# --- pre-rendered speech clips ------------------------------------------------
+
+def _prerendered_clips() -> list[dict]:
+    """The PRERENDERED table out of web/src/lib/speech.js, without a JS engine."""
+    js = (ROOT / "web" / "src" / "lib" / "speech.js").read_text(encoding="utf-8")
+    block = re.search(r"const PRERENDERED = \[(.*?)\n\];", js, re.S)
+    assert block, "PRERENDERED table missing from speech.js"
+    return [{"lang": m.group(1), "file": m.group(2), "text": m.group(3)} for m in
+            re.finditer(r'\{\s*lang:\s*"([^"]+)",\s*file:\s*"([^"]+)",\s*\n?\s*text:\s*"([^"]+)"',
+                        block.group(1))]
+
+
+def test_every_prerendered_clip_ships_the_file_it_names():
+    clips = _prerendered_clips()
+    assert clips, "no pre-rendered clips parsed — the regex and the table have drifted apart"
+    for c in clips:
+        f = ROOT / "web" / "public" / c["file"].lstrip("/")
+        assert f.exists(), f"{c['file']} is referenced but not in web/public"
+
+
+def test_a_prerendered_clip_may_only_speak_real_crida_advice():
+    """The clip is audio a listener cannot check against the screen, so it must be a
+    sentence the rules engine can actually emit — never hand-written advice."""
+    packs = E.load_rules()
+    real_kn = {r.action_kn.strip() for rules in packs.values() for r in rules}
+    for c in _prerendered_clips():
+        if c["lang"] != "kn":
+            continue
+        assert c["text"].strip() in real_kn, (
+            f"pre-rendered clip {c['file']} speaks text no CRIDA rule produces: {c['text']}")

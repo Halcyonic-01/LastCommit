@@ -11,6 +11,7 @@ import Tabs from "../components/Tabs.jsx";
 import { Shell, Msg, Rubric } from "../components/Frame.jsx";
 import { Pin, Fwd, Tick } from "../components/Marks.jsx";
 import LangSwitch from "../components/LangSwitch.jsx";
+import MessageBell from "../components/MessageBell.jsx";
 import VoiceAssistant from "../components/VoiceAssistant.jsx";
 
 export default function Today() {
@@ -62,6 +63,7 @@ export default function Today() {
             {karte ? <> · <span className="kn" style={{ fontWeight: 600 }}>{karte[lang] ?? karte.en} ಕಾರ್ತೆ</span></> : null}
           </div>
         </div>
+        <MessageBell areaId={areaId} lang={lang} />
         <LangSwitch lang={lang} />
       </div>
 

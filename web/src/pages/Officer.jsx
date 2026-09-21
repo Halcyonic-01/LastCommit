@@ -4,7 +4,8 @@ import { getLatest, LEADS, advisoryHorizon } from "../lib/api.js";
 import { karteFor } from "../i18n/strings.js";
 import { supabase } from "../lib/supabase.js";
 import HazardMap, { DRY, WATER } from "../components/HazardMap.jsx";
-import BroadcastPanel, { BROADCAST_API } from "../components/BroadcastPanel.jsx";
+import BroadcastPanel from "../components/BroadcastPanel.jsx";
+import { BROADCAST_API } from "../lib/officer.js";
 
 const REPORT_WINDOW_DAYS = 14;  // ground truth this recent is still worth showing an officer
 
@@ -80,7 +81,7 @@ export default function Officer() {
             KARNATAKA · {latest ? Object.keys(latest.areas).length : "—"} AREAS · RUN {latest?.provenance?.nwp?.run_date ?? "—"} · {latest?.meta?.model_version ?? ""}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 18 }}>
+        <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
           <Link to="/replay" className="ops-mono" style={{ fontSize: 12, color: "var(--ink)", borderBottom: "1px solid var(--rule2)", paddingBottom: 2 }}>
             REPLAY 2024 →
           </Link>

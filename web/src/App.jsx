@@ -4,6 +4,7 @@ import Welcome from "./pages/Welcome.jsx";
 import Today from "./pages/Today.jsx";
 import Why from "./pages/Why.jsx";
 import RainReport from "./pages/RainReport.jsx";
+import Messages from "./pages/Messages.jsx";
 
 import { loadPrefs, flushOutbox } from "./lib/store.js";
 import { t } from "./i18n/strings.js";
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="/today" element={<RequireOnboarded><Today /></RequireOnboarded>} />
         <Route path="/why" element={<RequireOnboarded><Why /></RequireOnboarded>} />
         <Route path="/rain" element={<RequireOnboarded><RainReport /></RequireOnboarded>} />
+        <Route path="/messages" element={<RequireOnboarded><Messages /></RequireOnboarded>} />
         <Route path="/officer" element={<Ops><Officer /></Ops>} />
         <Route path="/verify" element={<Ops><Verify /></Ops>} />
         <Route path="/replay" element={<Ops><Replay /></Ops>} />

@@ -18,6 +18,7 @@ export const Speaker = (p) => <M d={<>
   <path d="M4 10v4h3.5L12 17.5v-11L7.5 10H4z" /><path d="M15.5 9.5a3.5 3.5 0 0 1 0 5" /><path d="M18 7a7 7 0 0 1 0 10" /></>} {...p} />;
 export const Pin = (p) => <M d={<><path d="M12 21.5s7-6 7-11.5a7 7 0 1 0-14 0c0 5.5 7 11.5 7 11.5z" /><circle cx="12" cy="10" r="2.5" /></>} {...p} />;
 export const Back = (p) => <M d="M15 19l-7-7 7-7" {...p} />;
+export const Bell = (p) => <M d={<><path d="M18 8a6 6 0 1 0-12 0c0 6-2.5 7-2.5 7h17S18 14 18 8z" /><path d="M13.7 20a2 2 0 0 1-3.4 0" /></>} {...p} />;
 export const Fwd  = (p) => <M d="M9 5l7 7-7 7" {...p} />;
 export const Tick = (p) => <M d="M20 6.5L9.5 17 4 11.5" sw={2.6} {...p} />;
 export const Pause = (p) => <M d="M9 16V8M15 16V8" sw={2.5} {...p} />;

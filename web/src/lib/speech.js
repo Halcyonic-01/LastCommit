@@ -20,6 +20,37 @@ function normalizeLang(lang) {
 
 function _audioKey(text, lang) { return `tts-v3\u0000${lang}\u0000${text}`; }
 
+// Pre-rendered clips shipped in web/public. Indic Parler-TTS takes several seconds on
+// a sentence this long, which is too slow to demonstrate live, so the sentences we know
+// in advance are rendered once and served as files.
+//
+// The key is the EXACT sentence the clip speaks. That is the whole safety property: if
+// the forecast changes and the advisory text changes with it, the key stops matching and
+// synthesis takes over. A stale clip can never speak advice the screen is not showing.
+const PRERENDERED = [
+  { lang: "kn", file: "/demo_crida.wav",
+    text: "ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಿ, ಈ ವಾರ ಮಳೆಯ ಅಗತ್ಯವಿರುವ ಕೆಲಸ ಮುಂದೂಡಿ" },
+];
+
+// Trailing punctuation differs between the rules engine and the ASR server's reply
+// ("...ಮುಂದೂಡಿ" vs "...ಮುಂದೂಡಿ."); nothing else is allowed to differ.
+const _norm = (t) => String(t || "").replace(/\s+/g, " ").trim().replace(/[.।]+$/, "");
+
+function _prerendered(text, lang) {
+  const want = _norm(text);
+  return PRERENDERED.find((c) => c.lang === lang && _norm(c.text) === want) || null;
+}
+
+async function _fetchPrerendered(clip) {
+  const key = _audioKey(clip.text, clip.lang);
+  if (_audioCache.has(key)) return _audioCache.get(key);
+  const res = await fetch(clip.file);
+  if (!res.ok) throw new Error(`${clip.file} -> ${res.status}`);
+  const bytes = await res.arrayBuffer();
+  _audioCache.set(key, bytes);
+  return bytes;
+}
+
 // A failed probe is not permanent: the user may start the TTS server after opening the PWA.
 export async function checkParlerAvailable(force = false) {
   if (!force && _parlerAvailable !== null) return _parlerAvailable;
@@ -133,6 +164,21 @@ export async function speak(text, lang = "kn") {
   lang = normalizeLang(lang);
   stopSpeech();
   const generation = _speechGeneration;
+
+  // A clip we rendered earlier for this exact sentence plays instantly. It goes through
+  // _playWav like everything else, so stopSpeech/pause/resume still control it — an
+  // `new Audio()` here would keep playing over the top of whatever came next.
+  const clip = _prerendered(text, lang);
+  if (clip) {
+    try {
+      const pre = await _fetchPrerendered(clip);
+      if (generation === _speechGeneration && await _playWav(pre, generation)) return "prerendered";
+    } catch {
+      // the file is missing or undecodable — synthesise it instead of going silent
+    }
+    if (generation !== _speechGeneration) return false;
+  }
+
   // Always try the requested-language local voice first. This fixes the common
   // failure where Chrome's installed English voice preempts Indic Parler-TTS.
   const bytes = await _fetchParlerAudio(text, lang);

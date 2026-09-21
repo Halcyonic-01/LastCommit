@@ -60,8 +60,7 @@ def call(phone_id: str, token: str, payload: dict) -> dict:
 def resolve_recipients(override: str | None) -> list[str]:
     """Numbers to send to, in order: CLI override -> Supabase -> env.
 
-    No local-file fallback here — unlike Telegram, WhatsApp has no discovery API
-    (see whatsapp_setup.py), so Supabase is the only real subscriber list.
+    WhatsApp has no subscriber-discovery API, so Supabase is the only real list.
     """
     if override:
         return [override]

@@ -1,36 +1,30 @@
 import { useEffect, useState } from "react";
+import { BROADCAST_API, getToken, setToken } from "../lib/officer.js";
 
-// The dashboard has no backend of its own yet (Vercel isn't linked — see
-// IMPLEMENTATION_PLAN.md), so "Review broadcast" talks to services/broadcast_server.py
-// running on the officer's own machine. Hardcoded, not an env var: this is a fixed
-// local port by design, not a deployment target. Exported so Officer.jsx's
-// subscriber-count fetch hits the same server without a second hardcoded copy.
-export const BROADCAST_API = "http://localhost:8787";
-const TOKEN_KEY = "vd.officer.token";
-
-const CHANNEL_LABEL = { telegram: "Telegram", whatsapp: "WhatsApp" };
+// Farmer app first: it is the default, it really delivers, and it costs nothing.
+const CHANNEL_LABEL = { inapp: "Farmer app", whatsapp: "WhatsApp", sms: "SMS" };
 
 /** Broadcast review: real preview text, a real recipient send, never a one-tap fire. */
 export default function BroadcastPanel({ areaIds, areaNames, event, lead, onClose, onSent }) {
   const [health, setHealth] = useState(null);       // null=loading | "down" | {token_set, configured}
+  const [sim, setSim] = useState(null);              // per-channel provider + simulated flag
   const [preview, setPreview] = useState(null);      // null=loading | "down" | {text}
-  const [token, setToken] = useState(() => { try { return localStorage.getItem(TOKEN_KEY) || ""; } catch { return ""; } });
+  const [token, setTokenState] = useState(getToken);
   const [channels, setChannels] = useState(new Set());
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState(null);
 
   useEffect(() => {
     fetch(`${BROADCAST_API}/api/health`).then((r) => r.json())
-      .then((h) => { setHealth(h); setChannels(new Set(Object.keys(h.configured).filter((c) => h.configured[c]))); })
+      .then((h) => { setHealth(h); setChannels(new Set(h.configured.inapp ? ["inapp"] : [])); })
       .catch(() => setHealth("down"));
     fetch(`${BROADCAST_API}/api/preview?areaId=${encodeURIComponent(areaIds[0])}`).then((r) => r.json())
       .then((p) => setPreview(p.text ? p : "down")).catch(() => setPreview("down"));
+    fetch(`${BROADCAST_API}/api/notification-channels`).then((r) => r.json())
+      .then((b) => setSim(b.channels)).catch(() => {});
   }, [areaIds]);
 
-  const setTokenAndSave = (v) => {
-    setToken(v);
-    try { localStorage.setItem(TOKEN_KEY, v); } catch { /* device won't remember it next time, still usable now */ }
-  };
+  const setTokenAndSave = (v) => { setTokenState(v); setToken(v); };
 
   const toggleChannel = (c) => setChannels((s) => {
     const next = new Set(s);
@@ -104,7 +98,7 @@ export default function BroadcastPanel({ areaIds, areaNames, event, lead, onClos
                         color: configured ? "var(--ink)" : "var(--ink3)", opacity: configured ? 1 : .6 }}>
                         <input type="checkbox" disabled={!configured} checked={channels.has(c)} onChange={() => toggleChannel(c)}
                           style={{ accentColor: "var(--water2)", width: 15, height: 15 }} />
-                        {CHANNEL_LABEL[c]}{!configured ? " (not configured)" : ""}
+                        {CHANNEL_LABEL[c]}{sim?.[c]?.simulated ? " (simulated)" : !configured ? " (not configured)" : ""}
                       </label>
                     );
                   })}
@@ -124,9 +118,23 @@ export default function BroadcastPanel({ areaIds, areaNames, event, lead, onClos
               </div>
 
               {result ? (
-                <div style={{ marginTop: 16, borderLeft: `3px solid ${result.ok ? "var(--ok)" : "var(--risk)"}`, paddingLeft: 12, fontSize: 13 }}>
+                <div style={{ marginTop: 16, fontSize: 13, paddingLeft: 12,
+                  borderLeft: `3px solid ${!result.ok || result.failed ? "var(--risk)" : result.sent ? "var(--ok)" : "var(--wait)"}` }}>
                   {result.ok
-                    ? `Sent to ${result.sent} recipient${result.sent === 1 ? "" : "s"}${result.failed ? `, ${result.failed} failed` : ""}.`
+                    ? <>
+                        <div>
+                          {result.sent > 0
+                            ? `Delivered to ${result.sent} destination${result.sent === 1 ? "" : "s"}. Farmers see it on their Messages screen.`
+                            : "Nothing was delivered."}
+                          {result.failed ? ` ${result.failed} failed.` : ""}
+                          {result.skipped ? ` ${result.skipped} skipped.` : ""}
+                        </div>
+                        {(result.results || []).filter((r) => r.error).map((r, i) => (
+                          <div key={i} className="ops-mono" style={{ fontSize: 11, color: "var(--ink2)", marginTop: 4 }}>
+                            {r.channel}: {r.error}
+                          </div>
+                        ))}
+                      </>
                     : `Not sent: ${result.error}`}
                 </div>
               ) : null}

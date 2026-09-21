@@ -6,16 +6,23 @@ import {
   browserSpeechRecognition, interpretTranscript, normalizeSpeechLang,
 } from "../lib/asr.js";
 
+// Nothing may leave the user stuck: every path that starts a spinner arms this, and
+// firing it always lands back on idle with a message. Long enough for a slow first
+// Parler load, short enough that a demo does not look frozen.
+const STALL_MS = 20000;
+
 /**
  * Hold-to-speak voice assistant for the farmer.
  *
- * Renders only when the ASR server is reachable (:8766/health).
- * On hold: records via MediaRecorder → on release: POSTs to /transcribe
- * → shows transcript → speaks reply via Parler TTS.
+ * Two ways to hear the farmer, in this order:
+ *   1. services/asr/server.py — IndicConformer, on this machine, works offline.
+ *   2. the browser's own SpeechRecognition — needs a route to Google's speech
+ *      service, so it is the fallback rather than the default.
+ * Then /interpret maps the words to an intent and a reply, and speech.js speaks it.
  */
 export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = "" }) {
   lang = normalizeSpeechLang(lang);
-  const [asr, setAsr] = useState(isASRAvailable());
+  const [asr, setAsr] = useState(isASRAvailable() ? true : null); // null = still probing
   const [state, setState] = useState("idle"); // idle | listening | processing | done
   const [transcript, setTranscript] = useState("");
   const [reply, setReply] = useState("");
@@ -25,43 +32,59 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
   const recognitionRef = useRef(null);
   const browserTranscriptRef = useRef("");
   const chunksRef = useRef([]);
+  const stallRef = useRef(null);
 
   useEffect(() => {
     checkASRAvailable().then(setAsr).catch(() => setAsr(false));
   }, []);
 
-  // Browser recognition returns Hindi/Telugu/Kannada/English immediately and
-  // gives us interim words while the user is still speaking. Use the neural
-  // recorder only on browsers that do not expose SpeechRecognition.
-  const useBrowserSTT = browserSpeechRecognition();
-  if (useBrowserSTT && !browserSpeechRecognition()) return null;
-  if (!useBrowserSTT && !asr) return null;
+  const clearStall = () => { clearTimeout(stallRef.current); stallRef.current = null; };
+  useEffect(() => clearStall, []);
 
-  const finishTranscript = async (transcript) => {
-    if (!transcript.trim()) {
-      setError("I could not hear a clear answer. Please try again.");
-      setState("idle");
+  const fail = (message) => {
+    clearStall();
+    setError(message);
+    setState("idle");
+  };
+
+  // Arm the watchdog whenever we hand control to something that may never call back:
+  // the browser speech service can accept start() and then go quiet, and the button is
+  // disabled while processing, so without this the screen is dead until a reload.
+  const armStall = (message) => {
+    clearStall();
+    stallRef.current = setTimeout(() => fail(message), STALL_MS);
+  };
+
+  // The local server is preferred: it is this project's own model, it needs no internet,
+  // and it is the one we can actually keep running for a demo.
+  const useLocalASR = asr === true;
+  if (asr === null) return null;                              // still probing
+  if (!useLocalASR && !browserSpeechRecognition()) return null; // no way to listen at all
+
+  // What to say back. "repeat" means read the page; every other intent already has its
+  // own reply, and for "advisory" that reply IS the CRIDA advice — reading the whole page
+  // on top of it just made the answer long enough to need a pre-rendered clip to hide it.
+  const spokenFor = (data) =>
+    data.action === "repeat" ? (pageDescription || data.reply_text || "") : (data.reply_text || "");
+
+  const finishTranscript = async (heard) => {
+    if (!heard.trim()) {
+      fail("I could not hear a clear answer. Please try again.");
       return;
     }
     try {
-      const data = await interpretTranscript(transcript, lang);
-      setTranscript(data.transcript || transcript);
+      const data = await interpretTranscript(heard, lang);
+      clearStall();
+      setTranscript(data.transcript || heard);
       setReply(data.reply_text || "");
       setState("done");
-      const spokenResponse = [data.reply_text, pageDescription].filter(Boolean).join(" ");
+      const spokenResponse = spokenFor(data);
       if (spokenResponse) {
-        // --- HARDCODED DEMO INTERCEPTS FOR INSTANT PLAYBACK ---
-        if (data.action === "advisory" && lang === "kn") {
-          new Audio("/demo_crida.wav").play();
-          return;
-        }
-        // ------------------------------------------------------
         await checkParlerAvailable();
         await speak(spokenResponse, lang);
       }
     } catch {
-      setError("Could not understand the recording. Please try again.");
-      setState("idle");
+      fail("Could not understand the recording. Please try again.");
     }
   };
 
@@ -70,7 +93,7 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
     setTranscript("");
     setReply("");
     try {
-      if (useBrowserSTT) {
+      if (!useLocalASR) {
         const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new Recognition();
         recognition.lang = `${lang}-IN`;
@@ -87,22 +110,23 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
           // the browser closes the session before emitting a final result.
           browserTranscriptRef.current = text.trim();
         };
-        recognition.onerror = () => {
-          setError("Microphone access denied or speech was not recognised.");
-          setState("idle");
+        recognition.onerror = (e) => {
+          recognitionRef.current = null;
+          fail(e?.error === "not-allowed"
+            ? "Microphone permission is blocked for this site."
+            : "Speech was not recognised. Please try again.");
         };
         recognition.onend = () => {
           recognitionRef.current = null;
-          const transcript = browserTranscriptRef.current.trim();
-          if (transcript) finishTranscript(transcript);
-          else {
-            setError("Please speak a little longer, then try again.");
-            setState("idle");
-          }
+          const heard = browserTranscriptRef.current.trim();
+          if (heard) finishTranscript(heard);
+          else fail("Please speak a little longer, then try again.");
         };
         recognitionRef.current = recognition;
         recognition.start();
         setState("listening");
+        // The browser service can accept start() and then never call back at all.
+        armStall("The browser speech service did not respond. Please try again.");
         return;
       }
       if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
@@ -124,9 +148,8 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
       recorderRef.current = recorder;
       recorder.start(100); // collect every 100ms
       setState("listening");
-    } catch (err) {
-      setError("Microphone access denied.");
-      setState("idle");
+    } catch {
+      fail("Microphone access denied.");
     }
   };
 
@@ -134,11 +157,18 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setState("processing");
+      armStall("That took too long. Please try again.");
       return;
     }
     const recorder = recorderRef.current;
-    if (!recorder || recorder.state === "inactive") return;
+    // Nothing is running — the recogniser may have ended on its own while the button was
+    // still held. Returning here used to leave a disabled spinner on screen forever.
+    if (!recorder || recorder.state === "inactive") {
+      if (state === "listening") setState("idle");
+      return;
+    }
     setState("processing");
+    armStall("That took too long. Please try again.");
 
     await new Promise((resolve) => {
       recorder.onstop = resolve;
@@ -149,8 +179,7 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
     const mimeType = recorder.mimeType || "audio/webm";
     const blob = new Blob(chunksRef.current, { type: mimeType });
     if (blob.size < 500) {
-      setError("Audio too short. Hold the button and speak.");
-      setState("idle");
+      fail("Audio too short. Hold the button and speak.");
       return;
     }
 
@@ -166,21 +195,26 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
       });
       if (!res.ok) throw new Error(`ASR error ${res.status}`);
       const data = await res.json();
-      setTranscript(data.transcript || "");
+      if (!(data.transcript || "").trim()) {
+        fail("I could not hear a clear answer. Please try again.");
+        return;
+      }
+      clearStall();
+      setTranscript(data.transcript);
       setReply(data.reply_text || "");
       setState("done");
-      const spokenResponse = [data.reply_text, pageDescription].filter(Boolean).join(" ");
+      const spokenResponse = spokenFor(data);
       if (spokenResponse) {
         await checkParlerAvailable();
         await speak(spokenResponse, lang);
       }
-    } catch (err) {
-      setError("Could not reach the ASR server.");
-      setState("idle");
+    } catch {
+      fail("Could not reach the speech server on this machine.");
     }
   };
 
   const reset = () => {
+    clearStall();
     setTranscript("");
     setReply("");
     setError("");
@@ -232,6 +266,16 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
           {!isListening && !isProcessing && !isDone && !error &&
             <span>{t("holdToSpeak", lang)}</span>}
         </div>
+
+        {/* The mic is disabled while processing, so this is the only way back out
+            before the watchdog fires. Without one, a slow reply feels like a crash. */}
+        {isProcessing && (
+          <button type="button" onClick={reset}
+            style={{ fontSize: 11, background: "none", border: "none", color: "var(--ink3)",
+              cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+            {t("tryAgain", lang)}
+          </button>
+        )}
 
         {/* Error */}
         {error && (

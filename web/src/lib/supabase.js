@@ -1,7 +1,8 @@
 // Supabase client for the browser — anon key only, safe to expose. RLS decides what
 // anon can actually touch (schema/supabase.sql): insert + select on rain_reports,
-// insert-only on subscribers (whatsapp/sms, from onboarding's phone field —
-// never readable back, and never telegram), nothing at all on broadcasts.
+// select-only on farmer_messages (that read IS how an advisory reaches a farmer),
+// insert-only on subscribers from onboarding's phone field — never readable back —
+// and nothing at all on broadcasts or notifications.
 import { createClient } from "@supabase/supabase-js";
 
 const URL = import.meta.env.VITE_SUPABASE_URL;
