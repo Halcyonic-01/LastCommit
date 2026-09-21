@@ -35,7 +35,7 @@ export default function Officer() {
     : [];
   const dates = latest?.meta?.lead_dates?.[LEADS[lead]];
   const karte = karteFor(dates?.start ?? "");
-  const horizon = latest ? advisoryHorizon(latest.skill) : 2;
+  const horizon = latest ? advisoryHorizon(latest.skill) : 0;
   const beyond = lead >= horizon;
   const toggle = (id) => setQueued((q) => (q.includes(id) ? q.filter((x) => x !== id) : [...q, id]));
 

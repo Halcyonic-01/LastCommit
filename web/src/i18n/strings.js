@@ -118,11 +118,23 @@ export const TPL = {
     te: (n) => `ఇలాంటి 10 సంవత్సరాలలో ${n} సంవత్సరాలు వర్షం ఒక వారం ఆగింది`,
     en: (n) => `In ${n} of 10 years like this one, the rain stopped for a week`,
   },
+  // Was hardcoded to exactly two outlook weeks (h+1, h+2) -- true only when horizon
+  // happened to be 2. At the real horizon of 1, weeks 2, 3 AND 4 are outlook, and the
+  // old sentence could not say a third number, so it silently dropped week 4. Rewritten
+  // to a boundary statement that is correct for any horizon from 0 to 4.
   outlookNote: {
-    kn: (h) => `ಅದಕ್ಕೇ ಈ ಆ್ಯಪ್ ${h + 1} ಮತ್ತು ${h + 2}ನೇ ವಾರಕ್ಕೆ ಏನು ಮಾಡಬೇಕೆಂದು ಹೇಳುವುದಿಲ್ಲ. ಅಂದಾಜು ಎಂದಷ್ಟೇ ಹೇಳುತ್ತದೆ.`,
-    hi: (h) => `इसीलिए यह ऐप हफ़्ते ${h + 1} और ${h + 2} के लिए कोई सलाह नहीं देता। सिर्फ़ अनुमान कहता है।`,
-    te: (h) => `అందుకే ఈ యాప్ ${h + 1}, ${h + 2} వారాలకు ఏమి చేయాలో చెప్పదు. అంచనా మాత్రమే అని చెబుతుంది.`,
-    en: (h) => `That is why this app gives no action for weeks ${h + 1} and ${h + 2}. It only says outlook.`,
+    kn: (h) => h > 0
+      ? `ಈ ಆ್ಯಪ್ ${h}ನೇ ವಾರದವರೆಗೆ ಮಾತ್ರ ಏನು ಮಾಡಬೇಕೆಂದು ಹೇಳುತ್ತದೆ. ಅದರ ನಂತರ ಅಂದಾಜು ಮಾತ್ರ.`
+      : `ಈಗ ಯಾವ ವಾರಕ್ಕೂ ಏನು ಮಾಡಬೇಕೆಂದು ಹೇಳಲಾಗುವುದಿಲ್ಲ. ಎಲ್ಲವೂ ಅಂದಾಜು ಮಾತ್ರ.`,
+    hi: (h) => h > 0
+      ? `इसीलिए यह ऐप सिर्फ़ हफ़्ते ${h} तक की सलाह देता है। उसके बाद सिर्फ़ अनुमान है।`
+      : `अभी किसी भी हफ़्ते के लिए सलाह नहीं दी जा सकती। सब कुछ सिर्फ़ अनुमान है।`,
+    te: (h) => h > 0
+      ? `అందుకే ఈ యాప్ ${h}వ వారం వరకు మాత్రమే సలహా ఇస్తుంది. తర్వాత అంచనా మాత్రమే.`
+      : `ఇప్పుడు ఏ వారానికీ సలహా ఇవ్వలేము. అంతా అంచనా మాత్రమే.`,
+    en: (h) => h > 0
+      ? `That is why this app only gives action through week ${h}. Anything after that is outlook only.`
+      : `This app cannot give action for any week right now. Everything shown is outlook only.`,
   },
   whySpoken: {
     kn: (y, n) => `ಕಳೆದ ${y} ವರ್ಷಗಳ ಮಳೆ ದಾಖಲೆಯನ್ನು ಇಂದಿನ ಸ್ಥಿತಿಯ ಜೊತೆ ಹೋಲಿಸಿದ್ದೇವೆ. ಹತ್ತರಲ್ಲಿ ${n} ವರ್ಷ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು. ಈ ವಾರ ಮತ್ತು ಮುಂದಿನ ವಾರ ನಂಬಬಹುದು.`,

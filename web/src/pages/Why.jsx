@@ -22,11 +22,15 @@ export default function Why() {
 
   const f = d.forecast;
   const ten = outOfTen(f.p_dry7.w1);
-  const years = d.provenance_summary?.match(/(\d+)\s+years/)?.[1] ?? 34;
-  const members = d.provenance_summary?.match(/(\d+)\s+ECMWF/)?.[1] ?? 51;
+  // Real, structured fields only. provenance_summary is prose for a sentence, not a
+  // number source — regex-parsing it for "34" cost us the actual season count once
+  // already (it was hardcoded to the retired 34-LOYO methodology's number and never
+  // updated), so anything this page states as a fact reads it directly instead.
+  const seasons = d.skill?.seasons_scored ?? null;
+  const members = d.provenance_summary?.match(/(\d+)\s+ensemble members/)?.[1] ?? null;
   const horizon = advisoryHorizon(d.skill);
 
-  const spoken = `${tpl("whySpoken", lang, years, ten)} ${tpl("outlookNote", lang, horizon)}`;
+  const spoken = `${tpl("whySpoken", lang, seasons ?? "several", ten)} ${tpl("outlookNote", lang, horizon)}`;
 
   return (
     <Shell>
@@ -46,7 +50,7 @@ export default function Why() {
         <div className="spread pad" style={{ paddingTop: 22, paddingBottom: 24 }}>
           <div>
             {/* The evidence, stated as a sentence a person would say out loud. */}
-            <div className="rubric">Evidence · {years} seasons</div>
+            <div className="rubric">Evidence · {seasons ?? "—"} seasons</div>
             <h1 className="kn" style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.22, margin: "6px 0 0" }}>
               {tpl("tenYearsHead", lang, ten)}
             </h1>
@@ -109,14 +113,19 @@ export default function Why() {
             <div style={{ paddingTop: 16 }}>
               <Rubric en="Where this comes from">{t("whereFrom", lang)}</Rubric>
               <ol className="ed" style={{ margin: 0, paddingLeft: 20, fontSize: 14.5, lineHeight: 1.65, color: "var(--ink2)" }}>
-                <li><b style={{ color: "var(--ink)" }} className="num">{years}</b> monsoon seasons of IMD rainfall for this hobli, 1991&ndash;2024.</li>
-                <li><b style={{ color: "var(--ink)" }} className="num">{members}</b> ECMWF ensemble runs for the coming four weeks.</li>
+                <li>34 years of IMD rainfall for this hobli, 1991&ndash;2024 &mdash; of which
+                  <b style={{ color: "var(--ink)" }} className="num"> {seasons ?? "—"}</b> are the seasons
+                  scored above, the ones after training stopped.</li>
+                {members ? (
+                  <li><b style={{ color: "var(--ink)" }} className="num">{members}</b> ECMWF ensemble runs for the coming four weeks.</li>
+                ) : null}
                 <li>Rain gauges at every gram panchayat in Karnataka (KSNDMC), checked daily.</li>
                 <li>ICAR&ndash;CRIDA district agriculture contingency plan for the crop advice.</li>
               </ol>
               <div className="gloss" style={{ marginTop: 12 }}>
-                Scored one year at a time with that year held out, so the numbers above are
-                what the forecast did on seasons it had never seen.
+                Trained on 1991&ndash;2015, tuned on 2016&ndash;2019, scored only on
+                2020&ndash;2024 &mdash; a chronological split, so the numbers above are
+                what the forecast did on seasons that came after everything it was allowed to learn from.
               </div>
             </div>
           </div>

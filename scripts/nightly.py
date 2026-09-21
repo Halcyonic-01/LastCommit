@@ -97,17 +97,16 @@ def build_cell_probabilities(as_of: str, offline: bool):
     stat = I.statistical(row)
 
     # Today minus this area's climatological onset date, in weeks (schema's own
-    # definition). Only meaningful before onset has actually happened -- deep in the
-    # season this keeps growing and stops meaning "how late is onset running", so the
-    # caller only publishes it while onset_status == "pre_monsoon".
+    # definition), clipped to its documented [-8, 12] week bounds by the caller.
     onset_delay = ((row.set_index("cell_id")["doy"] - row.set_index("cell_id")["clim_onset_doy"])
                   / 7.0).to_frame("onset_delay_weeks")
 
     log("NWP ensemble member fractions")
-    parts = []
+    parts, ok_models = [], []
     for model in ("ec46", "gefs"):
         try:
             parts.append(N.probabilities(model, as_of, thresh))
+            ok_models.append(model)  # which ones actually ran, not just how many
         except FileNotFoundError as exc:
             log(f"  {model}: {exc}")
     nwp_p = (sum(parts) / len(parts)) if parts else pd.DataFrame(index=stat.index)
@@ -120,7 +119,7 @@ def build_cell_probabilities(as_of: str, offline: bool):
         "slots_without_a_model": I.missing_models(),
         "live_feature_coverage": I.feature_coverage(row),
         "blend_sources": sources,
-        "nwp_models": ["ec46", "gefs"][: len(parts)],
+        "nwp_models": ok_models,
     }
     return blended, diag, thresh, onset_delay
 
@@ -192,10 +191,15 @@ def run_one_day(as_of: str, offline: bool, out: Path, pilot_only: bool = False,
     # The weight caveat travels with every file. `skill` and `provenance` are both closed
     # to extra keys by the frozen schema, but provenance.nwp allows them — which is the
     # right home anyway, since it is a statement about the NWP contribution.
+    # 50 EC46 members + 1 control, 30 GEFS members: real counts of whichever models
+    # actually had a cached run this time, never a fixed "both ran" assumption.
+    NWP_LABEL = {"ec46": "ECMWF EC46", "gefs": "NOAA GEFS"}
+    NWP_MEMBERS = {"ec46": 51, "gefs": 30}
+    nwp_models = diag["nwp_models"]
     provenance = {
         "nwp": {
-            "source": "ECMWF EC46 + NOAA GEFS via Open-Meteo",
-            "members": 81,
+            "source": (" + ".join(NWP_LABEL[m] for m in nwp_models) or "none") + " via Open-Meteo",
+            "members": sum(NWP_MEMBERS[m] for m in nwp_models),
             "run_date": as_of,
             "weight_provenance": BL.WEIGHT_PROVENANCE,
         },
