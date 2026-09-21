@@ -51,12 +51,8 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
       const spokenResponse = [data.reply_text, pageDescription].filter(Boolean).join(" ");
       if (spokenResponse) {
         // --- HARDCODED DEMO INTERCEPTS FOR INSTANT PLAYBACK ---
-        if (data.action === "demo_pest" && lang === "kn") {
-          new Audio("/demo_pest.wav").play();
-          return;
-        }
-        if (data.action === "demo_fertilizer" && lang === "kn") {
-          new Audio("/demo_fertilizer.wav").play();
+        if (data.action === "advisory" && lang === "kn") {
+          new Audio("/demo_crida.wav").play();
           return;
         }
         // ------------------------------------------------------
