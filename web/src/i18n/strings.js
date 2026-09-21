@@ -24,6 +24,14 @@ export const S = {
   phoneNote:    { kn: "ಮೇಲಿನವುಗಳಂತಲ್ಲ, ಇದು ಈ ಫೋನ್ ಬಿಟ್ಟು ಹೋಗುತ್ತದೆ — WhatsApp ಅಥವಾ SMS ಮೂಲಕ ಸಂದೇಶ ಕಳುಹಿಸಲು.", hi: "ऊपर वालों के विपरीत, यह इस फ़ोन से बाहर जाता है — ताकि हम WhatsApp या SMS पर संदेश भेज सकें।", te: "పైవాటిలా కాకుండా, ఇది ఈ ఫోన్ నుండి బయటకు వెళుతుంది — WhatsApp లేదా SMS ద్వారా సందేశం పంపడానికి.", en: "Unlike your choices above, this leaves the phone — so we can message you on WhatsApp or SMS." },
   phoneSaved:   { kn: "ಉಳಿಸಲಾಗಿದೆ — ಈ ಸಂಖ್ಯೆಗೆ ಸಂದೇಶ ಕಳುಹಿಸುತ್ತೇವೆ", hi: "सहेजा गया — इस नंबर पर संदेश भेजेंगे", te: "సేవ్ చేయబడింది — ఈ నంబర్‌కు సందేశం పంపుతాము", en: "Saved — we'll message this number" },
   phoneFailed:  { kn: "ಉಳಿಸಲು ಆಗಲಿಲ್ಲ — ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", hi: "सहेज नहीं सके — बाद में फिर कोशिश करें", te: "సేవ్ చేయలేకపోయాము — తర్వాత మళ్ళీ ప్రయత్నించండి", en: "Could not save — try again later" },
+  // Voice assistant
+  voiceAssistant: { kn: "ಧ್ವನಿ ಸಹಾಯಕ", hi: "आवाज़ सहायक", te: "వాయిస్ అసిస్టెంట్", en: "Voice Assistant" },
+  holdToSpeak:    { kn: "ಒತ್ತಿ ಹಿಡಿದು ಮಾತನಾಡಿ", hi: "दबाकर बोलें", te: "నొక్కి పట్టి మాట్లాడండి", en: "Hold to speak" },
+  listening:      { kn: "ಕೇಳುತ್ತಿದ್ದೇವೆ…", hi: "सुन रहे हैं…", te: "వింటున్నాం…", en: "Listening…" },
+  processing:     { kn: "ಅರ್ಥ ಮಾಡಿಕೊಳ್ಳುತ್ತಿದ್ದೇವೆ…", hi: "समझ रहे हैं…", te: "అర్థం చేసుకుంటున్నాం…", en: "Processing…" },
+  youSaid:        { kn: "ನೀವು ಹೇಳಿದ್ದು", hi: "आपने कहा", te: "మీరు చెప్పింది", en: "You said" },
+  tryAgain:       { kn: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", hi: "फिर से कोशिश करें", te: "మళ్ళీ ప్రయత్నించండి", en: "Try again" },
+
   listen:     { kn: "ಕೇಳಿ", hi: "सुनें", te: "వినండి", en: "Listen" },
   back:       { kn: "ಹಿಂದೆ", hi: "पीछे", te: "వెనుకకు", en: "Back" },
 

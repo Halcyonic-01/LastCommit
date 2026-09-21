@@ -11,6 +11,7 @@ import Tabs from "../components/Tabs.jsx";
 import { Shell, Msg, Rubric } from "../components/Frame.jsx";
 import { Pin, Fwd, Tick } from "../components/Marks.jsx";
 import LangSwitch from "../components/LangSwitch.jsx";
+import VoiceAssistant from "../components/VoiceAssistant.jsx";
 
 export default function Today() {
   const { areaId, lang, place } = loadPrefs();
@@ -89,6 +90,8 @@ export default function Today() {
               <div style={{ marginTop: 18 }}>
                 <Speak text={spoken} lang={lang} />
               </div>
+
+              <VoiceAssistant lang={lang} areaId={areaId} />
             </div>
           </div>
 
