@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { speak, checkParlerAvailable } from "../lib/speech.js";
 import { t } from "../i18n/strings.js";
-import { isASRAvailable, checkASRAvailable, ASR_URL } from "../lib/asr.js";
+import {
+  isASRAvailable, checkASRAvailable, ASR_URL,
+  browserSpeechRecognition, interpretTranscript, normalizeSpeechLang,
+} from "../lib/asr.js";
 
 /**
  * Hold-to-speak voice assistant for the farmer.
@@ -10,7 +13,8 @@ import { isASRAvailable, checkASRAvailable, ASR_URL } from "../lib/asr.js";
  * On hold: records via MediaRecorder → on release: POSTs to /transcribe
  * → shows transcript → speaks reply via Parler TTS.
  */
-export default function VoiceAssistant({ lang = "kn", areaId }) {
+export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = "" }) {
+  lang = normalizeSpeechLang(lang);
   const [asr, setAsr] = useState(isASRAvailable());
   const [state, setState] = useState("idle"); // idle | listening | processing | done
   const [transcript, setTranscript] = useState("");
@@ -18,22 +22,106 @@ export default function VoiceAssistant({ lang = "kn", areaId }) {
   const [error, setError] = useState("");
 
   const recorderRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const browserTranscriptRef = useRef("");
   const chunksRef = useRef([]);
 
   useEffect(() => {
     checkASRAvailable().then(setAsr).catch(() => setAsr(false));
   }, []);
 
-  if (!asr) return null;
+  // Browser recognition returns Hindi/Telugu/Kannada/English immediately and
+  // gives us interim words while the user is still speaking. Use the neural
+  // recorder only on browsers that do not expose SpeechRecognition.
+  const useBrowserSTT = browserSpeechRecognition();
+  if (useBrowserSTT && !browserSpeechRecognition()) return null;
+  if (!useBrowserSTT && !asr) return null;
+
+  const finishTranscript = async (transcript) => {
+    if (!transcript.trim()) {
+      setError("I could not hear a clear answer. Please try again.");
+      setState("idle");
+      return;
+    }
+    try {
+      const data = await interpretTranscript(transcript, lang);
+      setTranscript(data.transcript || transcript);
+      setReply(data.reply_text || "");
+      setState("done");
+      const spokenResponse = [data.reply_text, pageDescription].filter(Boolean).join(" ");
+      if (spokenResponse) {
+        // --- HARDCODED DEMO INTERCEPTS FOR INSTANT PLAYBACK ---
+        if (data.action === "advisory" && lang === "kn") {
+          new Audio("/demo_advisory.wav").play();
+          return;
+        }
+        if (data.action === "demo_rain" && lang === "kn") {
+          new Audio("/demo_rain.wav").play();
+          return;
+        }
+        // ------------------------------------------------------
+        await checkParlerAvailable();
+        await speak(spokenResponse, lang);
+      }
+    } catch {
+      setError("Could not understand the recording. Please try again.");
+      setState("idle");
+    }
+  };
 
   const startRecording = async () => {
     setError("");
     setTranscript("");
     setReply("");
     try {
+      if (useBrowserSTT) {
+        const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new Recognition();
+        recognition.lang = `${lang}-IN`;
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+        browserTranscriptRef.current = "";
+        recognition.onresult = (event) => {
+          let text = "";
+          for (let i = 0; i < event.results.length; i += 1) {
+            text += `${event.results[i][0].transcript} `;
+          }
+          // Keep the latest complete phrase; interim text is still useful if
+          // the browser closes the session before emitting a final result.
+          browserTranscriptRef.current = text.trim();
+        };
+        recognition.onerror = () => {
+          setError("Microphone access denied or speech was not recognised.");
+          setState("idle");
+        };
+        recognition.onend = () => {
+          recognitionRef.current = null;
+          const transcript = browserTranscriptRef.current.trim();
+          if (transcript) finishTranscript(transcript);
+          else {
+            setError("Please speak a little longer, then try again.");
+            setState("idle");
+          }
+        };
+        recognitionRef.current = recognition;
+        recognition.start();
+        setState("listening");
+        return;
+      }
+      if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+        throw new Error("Audio recording is not supported by this browser");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chunksRef.current = [];
-      const recorder = new MediaRecorder(stream);
+      const mimeTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/ogg;codecs=opus",
+        "audio/mp4",
+      ];
+      const mimeType = mimeTypes.find((type) => MediaRecorder.isTypeSupported?.(type)) || "";
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
@@ -47,6 +135,11 @@ export default function VoiceAssistant({ lang = "kn", areaId }) {
   };
 
   const stopRecording = async () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setState("processing");
+      return;
+    }
     const recorder = recorderRef.current;
     if (!recorder || recorder.state === "inactive") return;
     setState("processing");
@@ -57,7 +150,8 @@ export default function VoiceAssistant({ lang = "kn", areaId }) {
       recorder.stream.getTracks().forEach((t) => t.stop());
     });
 
-    const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+    const mimeType = recorder.mimeType || "audio/webm";
+    const blob = new Blob(chunksRef.current, { type: mimeType });
     if (blob.size < 500) {
       setError("Audio too short. Hold the button and speak.");
       setState("idle");
@@ -66,7 +160,8 @@ export default function VoiceAssistant({ lang = "kn", areaId }) {
 
     try {
       const form = new FormData();
-      form.append("audio", blob, "recording.webm");
+      const extension = mimeType.includes("ogg") ? "ogg" : mimeType.includes("mp4") ? "mp4" : "webm";
+      form.append("audio", blob, `recording.${extension}`);
       const res = await fetch(`${ASR_URL}/transcribe`, {
         method: "POST",
         headers: { "X-Lang": lang },
@@ -78,10 +173,10 @@ export default function VoiceAssistant({ lang = "kn", areaId }) {
       setTranscript(data.transcript || "");
       setReply(data.reply_text || "");
       setState("done");
-      // Speak the reply through Parler TTS
-      if (data.reply_text) {
+      const spokenResponse = [data.reply_text, pageDescription].filter(Boolean).join(" ");
+      if (spokenResponse) {
         await checkParlerAvailable();
-        speak(data.reply_text, lang);
+        await speak(spokenResponse, lang);
       }
     } catch (err) {
       setError("Could not reach the ASR server.");
@@ -118,7 +213,7 @@ export default function VoiceAssistant({ lang = "kn", areaId }) {
           type="button"
           onPointerDown={startRecording}
           onPointerUp={stopRecording}
-          onPointerLeave={isListening ? stopRecording : undefined}
+          onPointerCancel={isListening ? stopRecording : undefined}
           disabled={isProcessing}
           aria-label={isListening ? t("listening", lang) : t("holdToSpeak", lang)}
           style={{

@@ -32,7 +32,11 @@ log = logging.getLogger(__name__)
 
 PORT = 8766
 MODEL_ID = "ai4bharat/indic-conformer-600m-multilingual"
-SUPPORTED_LANGS = ["kn", "hi", "te", "en"]
+# This checkpoint contains Indic language masks/vocabularies only.  English is
+# a UI/TTS language, but passing ``en`` to the model raises KeyError because
+# there is no corresponding entry in language_masks.json.
+SUPPORTED_LANGS = ["kn", "hi", "te"]
+INTERPRET_LANGS = [*SUPPORTED_LANGS, "en"]
 
 # ---------------------------------------------------------------------------
 # Intent matching — keyword-based, no LLM needed.
@@ -57,6 +61,12 @@ INTENTS = {
         "te": ["విత్తనాలు", "సలహా", "ఏమి చేయాలి", "సమాచారం"],
         "en": ["sow", "sowing", "advice", "what to do", "advisory", "suggest"],
     },
+    "demo_rain": {
+        "kn": ["ಮಳೆ ಬರುತ್ತಾ", "ಮಳೆ ಇದೆಯಾ"],
+        "hi": ["बारिश होगी", "क्या बारिश"],
+        "te": ["వర్షం పడుతుందా"],
+        "en": ["will it rain", "going to rain", "any rain"],
+    },
     "repeat": {
         "kn": ["ಮತ್ತೆ", "ಮತ್ತೊಮ್ಮೆ", "ಮರುಕಳಿಸಿ", "ಮತ್ತೆ ಹೇಳಿ"],
         "hi": ["फिर से", "दोबारा", "फिर बोलो", "दुबारा"],
@@ -79,16 +89,22 @@ REPLIES = {
         "en": "Thank you. No rain today has been recorded.",
     },
     "advisory": {
-        "kn": "ಇಂದಿನ ಸಲಹೆ ತೆರೆಯಲಾಗಿದೆ. ದಯವಿಟ್ಟು ಕೇಳಿ ಬಟನ್ ಒತ್ತಿ.",
+        "kn": "ಇಂದಿನ ಸಲಹೆಗಾಗಿ ಪರದೆಯನ್ನು ನೋಡಿ.",
         "hi": "आज की सलाह खुल गई है। कृपया सुनें बटन दबाएँ।",
         "te": "నేటి సలహా తెరవబడింది. దయచేసి వినండి బటన్ నొక్కండి.",
-        "en": "Today's advisory is shown. Please tap the listen button.",
+        "en": "Please check the advice on screen.",
     },
     "repeat": {
         "kn": "ಸಲಹೆ ಮತ್ತೆ ಓದಲಾಗುತ್ತಿದೆ.",
         "hi": "सलाह फिर से पढ़ी जा रही है।",
         "te": "సలహా మళ్ళీ చదవబడుతోంది.",
         "en": "Repeating the advisory now.",
+    },
+    "demo_rain": {
+        "kn": "ಇಲ್ಲ. ಇಂದು ಮಳೆ ಇಲ್ಲ.",
+        "hi": "नहीं। आज बारिश नहीं होगी।",
+        "te": "లేదు. ఈరోజు వర్షం లేదు.",
+        "en": "No rain is expected today.",
     },
     "unknown": {
         "kn": "ಅರ್ಥವಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.",
@@ -166,9 +182,12 @@ def _transcribe(wav_path: str, lang: str) -> str | None:
             audio_data = audio_data.T
         wav = torch.from_numpy(audio_data)
 
-        # Map our 2-letter codes to IndicConformer's expected codes
-        lang_map = {"kn": "kn", "hi": "hi", "te": "te", "en": "en"}
-        lc = lang_map.get(lang, "kn")
+        # Keep this explicit: silently mapping an unsupported language to
+        # another language produces confidently wrong transcripts.
+        if lang not in SUPPORTED_LANGS:
+            log.warning("IndicConformer does not support language %r", lang)
+            return None
+        lc = lang
         result = model(wav, lc, "ctc")
         return result.strip() if isinstance(result, str) else str(result).strip()
     except Exception as exc:
@@ -214,6 +233,9 @@ class ASRHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path == "/interpret":
+            self._interpret()
+            return
         if self.path != "/transcribe":
             self._send_json(404, {"error": "not found"})
             return
@@ -223,29 +245,48 @@ class ASRHandler(BaseHTTPRequestHandler):
         raw = self.rfile.read(length)
 
         # Parse multipart to get audio blob and lang
-        lang = self.headers.get("X-Lang", "kn").strip()
+        lang = self.headers.get("X-Lang", "kn").strip().lower()
         if lang not in SUPPORTED_LANGS:
-            lang = "kn"
+            self._send_json(400, {
+                "error": "unsupported ASR language",
+                "lang": lang,
+                "supported_langs": SUPPORTED_LANGS,
+            })
+            return
 
         # Try to extract audio bytes from multipart
         audio_bytes = None
         suffix = ".webm"
         if "multipart" in content_type:
-            boundary = content_type.split("boundary=")[-1].encode()
+            boundary = content_type.split("boundary=", 1)[-1].strip().strip('"').encode()
             parts = raw.split(b"--" + boundary)
             for part in parts:
                 if b'name="audio"' in part:
-                    # Detect file extension from Content-Disposition or Content-Type
-                    if b"webm" in part:
-                        suffix = ".webm"
-                    elif b"ogg" in part:
+                    header_end = part.find(b"\r\n\r\n")
+                    header = part[:header_end].lower() if header_end != -1 else part.lower()
+                    # Detect the container from the part headers. The browser may
+                    # legitimately send Ogg/MP4 instead of WebM (notably Safari).
+                    if b"filename=" in header and b".ogg" in header:
                         suffix = ".ogg"
-                    elif b"wav" in part:
+                    elif b"filename=" in header and b".mp4" in header:
+                        suffix = ".mp4"
+                    elif b"ogg" in header:
+                        suffix = ".ogg"
+                    elif b"mp4" in header:
+                        suffix = ".mp4"
+                    elif b"wav" in header:
                         suffix = ".wav"
+                    elif b"webm" in header:
+                        suffix = ".webm"
                     # Body is after the double CRLF
-                    body_start = part.find(b"\r\n\r\n")
+                    body_start = header_end
                     if body_start != -1:
-                        audio_bytes = part[body_start + 4:].rstrip(b"\r\n--")
+                        body_start += 4
+                        # Remove only the multipart line ending. `rstrip(b"\r\n--")`
+                        # treats every listed byte as disposable and can corrupt a
+                        # valid audio payload whose final byte happens to match.
+                        body_end = part.find(b"\r\n--", body_start)
+                        audio_bytes = part[body_start:body_end if body_end != -1 else len(part)]
                     break
         else:
             # Raw binary body (wav/webm posted directly)
@@ -276,6 +317,39 @@ class ASRHandler(BaseHTTPRequestHandler):
         reply = REPLIES.get(action, REPLIES["unknown"]).get(lang, REPLIES["unknown"]["en"])
 
         log.info("Transcript: %r  action: %s  lang: %s", transcript, action, lang)
+        self._send_json(200, {
+            "transcript": transcript,
+            "lang": lang,
+            "action": action,
+            "reply_text": reply,
+        })
+
+    def _interpret(self):
+        """Turn browser-provided text into the same action/reply as ASR."""
+        length = int(self.headers.get("Content-Length", 0))
+        try:
+            body = json.loads(self.rfile.read(length))
+        except Exception:
+            self._send_json(400, {"error": "invalid JSON"})
+            return
+
+        transcript = (body.get("transcript") or "").strip()
+        lang = (body.get("lang") or "kn").strip().lower()
+        if not transcript:
+            self._send_json(400, {"error": "transcript is required"})
+            return
+        if lang not in INTERPRET_LANGS:
+            self._send_json(400, {
+                "error": "unsupported language",
+                "lang": lang,
+                "supported_langs": INTERPRET_LANGS,
+            })
+            return
+
+        action = _match_intent(transcript, lang)
+        reply = REPLIES.get(action, REPLIES["unknown"]).get(
+            lang, REPLIES["unknown"]["en"]
+        )
         self._send_json(200, {
             "transcript": transcript,
             "lang": lang,
