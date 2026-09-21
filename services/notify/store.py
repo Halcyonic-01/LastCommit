@@ -20,6 +20,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL = ROOT / "data" / "interim" / "notifications.jsonl"  # gitignored: holds destinations
+# The farmer's own copy. Supabase is the real delivery path; this is what keeps the
+# officer -> farmer loop working on one machine before schema/supabase.sql has been run,
+# served back to the PWA by broadcast_server's /api/farmer-messages.
+LOCAL_MESSAGES = ROOT / "data" / "interim" / "farmer_messages.jsonl"
 
 sys.path.insert(0, str(ROOT / "src"))
 from varshadrishti.data import supabase_client as SB  # noqa: E402
@@ -134,3 +138,39 @@ def set_status(notification_id: str, status: str, detail: str | None = None) -> 
     if hit is not None:
         _rewrite_local(rows)
     return hit, "file"
+
+
+# --- farmer messages ----------------------------------------------------------
+
+def deliver_message(row: dict) -> tuple[dict, str]:
+    """Deliver one advisory to an area. -> (stored row, backend that took it)."""
+    row = {"created_at": _now(), **row}
+    stored = SB.insert_farmer_message(row)
+    if stored is not None:
+        return stored, "supabase"
+    row = {"id": str(uuid.uuid4()), **row}
+    LOCAL_MESSAGES.parent.mkdir(parents=True, exist_ok=True)
+    with LOCAL_MESSAGES.open("a", encoding="utf-8") as fh:
+        fh.write(_line(row))
+    return row, "file"
+
+
+def messages_for(area_id: str, limit: int = 30) -> tuple[list[dict], str]:
+    """An area's advisories, newest first. -> (rows, backend that answered)."""
+    rows = SB.fetch_farmer_messages(area_id, limit=limit)
+    if rows is not None:
+        return rows, "supabase"
+    if not LOCAL_MESSAGES.exists():
+        return [], "file"
+    out = []
+    for line in LOCAL_MESSAGES.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            r = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if r.get("area_id") == area_id:
+            out.append(r)
+    out.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    return out[:limit], "file"

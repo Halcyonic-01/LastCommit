@@ -170,6 +170,14 @@ export const TPL = {
     te: (y, n) => `మేము ${y} సంవత్సరాల వర్ష రికార్డును నేటి పరిస్థితితో పోల్చాము. పదిలో ${n} సంవత్సరాలు ఒక వారం వర్షం ఆగింది.`,
     en: (y, n) => `We compared ${y} years of rainfall records with today's conditions. In ${n} of 10 similar years the rain stopped for a week.`,
   },
+  // The "where this comes from" block on /why, said as one sentence. Numbers are the
+  // real ones off the bulletin; the ECMWF clause drops out when that field is absent.
+  whySources: {
+    kn: (m) => `ಈ ಹೋಬಳಿಯ 34 ವರ್ಷಗಳ ಐಎಂಡಿ ಮಳೆ ದಾಖಲೆ${m ? `, ಮುಂದಿನ ನಾಲ್ಕು ವಾರಗಳಿಗೆ ${m} ಇಸಿಎಂಡಬ್ಲ್ಯೂಎಫ್ ಮಾದರಿ ಓಟಗಳು` : ""}, ಮತ್ತು ಬೆಳೆ ಸಲಹೆಗೆ ಐಸಿಎಆರ್-ಕ್ರಿಡಾ ಜಿಲ್ಲಾ ಯೋಜನೆ.`,
+    hi: (m) => `इस होबली का 34 साल का IMD बारिश रिकॉर्ड${m ? `, अगले चार हफ़्तों के लिए ${m} ECMWF मॉडल रन` : ""}, और फ़सल सलाह के लिए ICAR-CRIDA ज़िला योजना।`,
+    te: (m) => `ఈ హోబళి యొక్క 34 సంవత్సరాల IMD వర్ష రికార్డు${m ? `, రాబోయే నాలుగు వారాలకు ${m} ECMWF మోడల్ రన్‌లు` : ""}, మరియు పంట సలహా కోసం ICAR-CRIDA జిల్లా ప్రణాళిక.`,
+    en: (m) => `34 years of IMD rainfall for this hobli${m ? `, ${m} ECMWF model runs for the coming four weeks` : ""}, and the ICAR-CRIDA district plan for the crop advice.`,
+  },
 };
 
 /** Render a numbered sentence in the chosen language, never silently in English. */

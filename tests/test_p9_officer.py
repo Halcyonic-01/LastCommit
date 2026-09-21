@@ -84,7 +84,14 @@ def test_why_spoken_no_longer_contradicts_the_outlook_note():
     already states the real horizon (now 1) — the two used to contradict each other
     read aloud back to back."""
     assert "Trust this week and next" not in STRINGS
-    assert 'const spoken = `${tpl("whySpoken"' in WHY, "whySpoken must still feed the same spoken string as outlookNote"
+    # Pin the property, not the syntax: both templates must land in the one string the
+    # listen button reads, so a horizon claim cannot drift out of sync with the evidence.
+    # The builder moved to lib/narration.js when Today started sharing it.
+    narration = (WEB / "lib" / "narration.js").read_text(encoding="utf-8")
+    body = re.search(r"export function whyNarration\(.*?\n\}", narration, re.S)
+    assert body, "whyNarration() is gone — /why no longer has one narration builder"
+    assert 'tpl("whySpoken"' in body.group(0)
+    assert 'tpl("outlookNote"' in body.group(0)
 
 
 def test_why_page_states_the_training_split_only_once():

@@ -111,22 +111,25 @@ class InApp:
     simulated = False
 
     def configured(self) -> bool:
-        return SB.client() is not None
+        return True  # the local fallback below means this channel always has somewhere to go
 
     def send(self, area_id: str, text: str, meta: dict | None = None) -> Result:
         if not area_id:
             return Result(ok=False, simulated=False, error="no area")
         m = meta or {}
-        row = SB.insert_farmer_message({
+        from . import store as ST  # noqa: PLC0415 — avoids a circular import at module load
+        row, backend = ST.deliver_message({
             "area_id": area_id, "body": text,
             "severity": m.get("severity"), "rule_id": m.get("rule_id"),
             "source_table": m.get("source_table"), "risk_event": m.get("risk_event"),
             "risk_lead": m.get("risk_lead"), "risk_p": m.get("risk_p"),
         })
-        if row is None:
-            return Result(ok=False, simulated=False,
-                          error="Supabase unavailable — run schema/supabase.sql, see README")
-        return Result(ok=True, simulated=False, provider_message_id=row.get("id"))
+        # Delivered either way, but say which: Supabase reaches a real phone anywhere,
+        # the file only reaches an app talking to this machine's broadcast server.
+        return Result(ok=True, simulated=False, provider_message_id=row.get("id"),
+                      error=None if backend == "supabase"
+                      else "stored locally — reaches the app on this machine; "
+                           "run schema/supabase.sql for real devices")
 
 
 class WhatsAppCloud:

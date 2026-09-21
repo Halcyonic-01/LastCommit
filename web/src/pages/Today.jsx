@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { getArea, verdict, outOfTen, advisoryHorizon } from "../lib/api.js";
 import { loadPrefs } from "../lib/store.js";
 import { VERDICT, S, t, tpl, pick, karteFor } from "../i18n/strings.js";
+import { todayNarration } from "../lib/narration.js";
 import Photo from "../components/Photo.jsx";
 import Speak from "../components/Speak.jsx";
 import Decade from "../components/Decade.jsx";
@@ -12,7 +13,6 @@ import { Shell, Msg, Rubric } from "../components/Frame.jsx";
 import { Pin, Fwd, Tick } from "../components/Marks.jsx";
 import LangSwitch from "../components/LangSwitch.jsx";
 import MessageBell from "../components/MessageBell.jsx";
-import VoiceAssistant from "../components/VoiceAssistant.jsx";
 
 export default function Today() {
   const { areaId, lang, place } = loadPrefs();
@@ -20,6 +20,7 @@ export default function Today() {
   const [err, setErr] = useState(null);
 
   useEffect(() => { getArea(areaId).then(setD).catch((e) => setErr(e.message)); }, [areaId]);
+
 
   if (err) return <Shell><Msg kind="failed" lang={lang} detail={err} /><Tabs lang={lang} /></Shell>;
   if (!d)  return <Shell><Msg kind="loading" lang={lang} /><Tabs lang={lang} /></Shell>;
@@ -32,16 +33,7 @@ export default function Today() {
   const ten = outOfTen(f.p_dry7.w1);
   const karte = karteFor(d.meta.valid_from);
 
-  const spoken = [
-    pick(state.speak, lang),
-    tpl("tenYears", lang, ten),
-    // Advisory payloads currently have Kannada and English only. Never read
-    // English as if it were Hindi or Telugu; the localized verdict above is
-    // the important actionable description for those languages.
-    adv && (lang === "kn" || lang === "en")
-      ? (lang === "kn" ? adv.action_kn : adv.action_en)
-      : "",
-  ].filter(Boolean).join(" ");
+  const spoken = todayNarration(d, lang);
 
   return (
     <Shell>
@@ -105,7 +97,6 @@ export default function Today() {
                 <Speak text={spoken} lang={lang} />
               </div>
 
-              <VoiceAssistant lang={lang} areaId={areaId} pageDescription={spoken} />
             </div>
           </div>
 

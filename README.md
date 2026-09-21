@@ -45,7 +45,7 @@ The solution is to:
 - Offline-first: service-worker caching of the app shell, forecast, geography, and photographs.
 - Offline rain-report outbox that flushes to Supabase on reconnect.
 - A notification screen in WhatsApp-style message bubbles, reached from a bell on Today that carries an unread dot.
-- Local IndicConformer ASR and Indic Parler-TTS, plus a hold-to-speak voice assistant that answers out of the same CRIDA advisory the screen shows.
+- A read-aloud button on every farmer screen, speaking that screen's key detail in the chosen language via local Indic Parler-TTS.
 
 **Officer operations**
 
@@ -279,65 +279,51 @@ ASR (`services/asr/server.py`): `GET /health`, `POST /transcribe` with multipart
 
 TTS (`services/tts/server.py`): `GET /health` and `POST /synthesize` with `{ "text": "...", "lang": "kn|hi|te|en" }`, returning WAV. Indic Parler-TTS loads once at startup and uses separate spoken-text and voice-description tokenizers. First startup is slow because weights load; later requests reuse the process. Both run on the operator's own machine, so farmer audio never leaves it.
 
-### Speech to speech
+### Read-aloud
 
-`VoiceAssistant` on the Today and Why screens is hold-to-speak. One press runs four stages:
+Every farmer screen has a ಕೇಳಿ (listen) button that speaks **the important detail of that
+screen and nothing else** — a farmer who cannot read needs the decision, not the furniture:
 
-1. **Hear.** The local IndicConformer server is preferred — it is this project's own model, it needs no internet, and it is the one that can be kept running for a demo. `MediaRecorder` captures the hold, and `POST /transcribe` with `X-Lang` returns the words. Only when that server is unreachable does the component fall back to the browser's `SpeechRecognition`, which needs a route to Google's speech service.
-2. **Understand.** `POST /interpret` matches the transcript against a finite keyword table (`INTENTS` in `services/asr/server.py`) and returns one of `rain_yes`, `rain_no`, `advisory`, `repeat`, or `unknown`. No model chooses the reply. For `advisory` the reply text is read out of the live `forecast/area/<id>.json`, so the assistant speaks the same CRIDA advice the screen shows.
-3. **Answer.** `repeat` re-reads the page; every other intent speaks its own reply.
-4. **Speak.** `speak()` in `web/src/lib/speech.js` tries three sources in order: a pre-rendered clip, then Indic Parler-TTS, then a same-language browser voice.
+| Screen | What it reads |
+|---|---|
+| Today | the verdict, how many of the last ten similar years saw the rain stop, and the CRIDA action |
+| Why | the evidence behind that number, and how far ahead the forecast is trusted |
+| Rain report | what is being asked, and why answering it matters |
 
-**Pre-rendered clips.** Parler takes around eight seconds on a full advisory sentence, which is too slow to demonstrate live. Sentences known in advance are rendered once into `web/public` and listed in `PRERENDERED`, keyed by **the exact sentence the clip speaks** — measured at 9 ms against 8,050 ms for synthesis on the same text.
+`speak()` in `web/src/lib/speech.js` tries three sources in order: a pre-rendered clip,
+then Indic Parler-TTS, then a same-language browser voice. It never substitutes an
+unrelated installed voice — an English voice reading Kannada is worse than silence.
 
-That key is the safety property. If the forecast changes and the advisory changes with it, the key stops matching and synthesis takes over, so a clip can never speak advice the screen is not showing. Two tests hold the line: every listed clip must ship the file it names, and a clip's text must be a sentence some CRIDA rule actually produces, so a hand-written line cannot be recorded and played as if it were advice.
+Two things make it usable rather than merely correct:
 
-Clips play through the same audio path as synthesised speech, so the stop, pause, and resume controls govern them too.
+- **Preloading.** Parler takes 9–20 seconds on a full narration, which is far too slow on
+  the critical path. `Speak` starts generating on mount, so by the time anyone presses the
+  button the audio is cached: measured at **4 ms** from click to sound once preloaded.
+- **Starting the audio device on the click.** A browser only lets audio begin from a user
+  gesture, and after a ten-second synthesis the click no longer counts as one — which
+  makes playback fail silently, with no error anywhere. `unlockAudio()` therefore runs as
+  the first statement of the handler, and an `<audio>` element is used as a fallback where
+  an `AudioContext` would be refused.
 
-**Recovery.** Every stage that hands control to something which may not call back arms a watchdog (`STALL_MS`), and a cancel link is shown while processing. The browser speech service in particular can accept `start()` and then go quiet; without these the mic button stays disabled and the screen is dead until a reload.
+**Pre-rendered clips.** Sentences known in advance are rendered once into `web/public` and
+listed in `PRERENDERED`, keyed by the exact sentence the clip speaks. The key is the safety
+property: if the forecast changes and the advisory changes with it, the key stops matching
+and synthesis takes over, so a clip can never speak advice the screen is not showing. Two
+tests hold that line — every listed clip must ship its file, and a clip's text must be a
+sentence some CRIDA rule actually produces.
 
-### Database
+### Speech to speech — planned, not in this release
 
-`schema/supabase.sql` creates:
+`services/asr/server.py` (IndicConformer) and `web/src/components/VoiceAssistant.jsx`
+implement hold-to-speak: record, transcribe, match the words against a finite keyword
+table in `/interpret`, and answer with the advisory. The pieces work and the code stays in
+the tree, but the assistant is **not mounted on any screen in this release**.
 
-- `rain_reports`: anonymous area-level `none|light|heavy` reports, with RLS allowing anonymous insert/select;
-- `subscribers`: area, channel, destination, language, crop, and active state. Anonymous insert is allowed only for WhatsApp/SMS onboarding rows; service-role code reads the list;
-- `broadcasts`: service-role audit log of area IDs, event, lead, channel, count, dry-run, and trigger source;
-- `farmer_messages`: the advisories an officer has sent to an area, read by the PWA's notification screen with the anon key. Anonymous SELECT is allowed and anonymous INSERT is not — that read is the delivery, and the table holds no personal data;
-- `notifications`: service-role per-farmer dispatch log — the advice and its CRIDA citation, the channel and provider, a `simulated` flag, and the delivery status. `broadcasts` counts sends per area; this records them per dispatch.
-
-The frontend queues rain reports offline and flushes them online. It can register WhatsApp/SMS destinations. `src/varshadrishti/data/supabase_client.py` reads subscribers and logs sends. Unconfigured Supabase degrades these paths to no-op/status responses so the forecast demo still runs.
-
-### Messaging
-
-`services/whatsapp/send.py` is the one command-line sender: it calls the Meta Graph API and supports free text within the WhatsApp session window or a pre-approved template. Everything else goes through the notification layer below.
-
-`services/broadcast_server.py` is a local officer boundary on port 8787. It previews and sends reviewed broadcasts using the Supabase subscriber list, then best-effort logs successful sends. The third channel, `sms`, is addressed through the notification provider interface below rather than a standalone CLI sender, because every Indian SMS gateway is metered; it is simulated in this build and renders plain text with the markup stripped.
-
-### Notifications: officer to farmer
-
-An officer queues areas on `/officer`, presses **Review broadcast**, reads the actual Kannada message, and sends. The advice itself is never composed there — it is already fixed by `rules/engine.py` and read out of `forecast/area/<id>.json`.
-
-The farmer reads it on `/messages`: a plain list of WhatsApp-style message bubbles, reached from a bell on the Today screen that shows a dot when something is unread. There is nothing else on that screen — no status, no channel, no settings.
-
-Three layers, under `services/notify/`:
-
-- `providers.py` — one `send()` per channel, each reporting its own `simulated` flag. `InApp` writes to `farmer_messages` and is the real delivery path; `SimulatedWhatsApp` and `SimulatedSMS` compose the real message and transmit nothing; `WhatsAppCloud` calls the Meta Graph API through `services/whatsapp/send.py`.
-- `dispatcher.py` — resolves the audience, validates it, suppresses duplicate sends, calls the provider, and records the result. Never raises for one bad recipient.
-- `store.py` — writes to the Supabase `notifications` table, falling back to a gitignored `data/interim/notifications.jsonl` when Supabase is unreachable. Every read reports which backend answered.
-
-**The farmer app is the default channel and the one that really delivers.** It is addressed by area rather than by phone number, so one row serves every farmer whose app is set to that hobli, no one has to hand over a number, and nothing is metered. `farmer_messages` holds no personal data at all, which is why the PWA's anon key may read it — that read *is* the delivery.
-
-**WhatsApp and SMS are simulated, because both gateways are metered.** `provider_for("whatsapp")` returns the real Cloud API provider only when both `WHATSAPP_PHONE_NUMBER_ID` and `WHATSAPP_ACCESS_TOKEN` are set — that is the entire switch, with no code change anywhere above it. Until then:
-
-- the officer sees the channel labelled `(simulated)` before sending;
-- every stored row carries `simulated = true` and a `sim-`-prefixed message id that cannot be mistaken for a Meta `wamid`;
-- a simulated row stops at status `sent` and **cannot be advanced to `delivered` or `read`** — `POST /api/notification-status` answers `409` and the store refuses the write, because only a real provider receipt can report a delivery.
-- SMS is rendered as plain text, with the `*bold*`/`_italic_` markers stripped, because a plain handset shows them literally.
-
-Duplicate suppression: the same area, channel, destination, and CRIDA rule will not be sent twice within `DUPLICATE_WINDOW_HOURS` (12). A previously *failed* attempt is never treated as a duplicate. `force: true` overrides.
-
-Phone numbers never reach the browser — every API response masks them (`+91***01`), and the history endpoint requires the officer passcode.
+It is held back on latency, not correctness. Recognition and synthesis together put ten
+seconds or more between a farmer's question and an answer, which is longer than the
+interaction is worth. Shipping the read-aloud button first gives the same information
+reliably and instantly. Re-enabling it is one import and one line in `Today.jsx`, and the
+work to do first is caching and a smaller ASR checkpoint.
 
 ## API reference
 

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { speak, checkParlerAvailable } from "../lib/speech.js";
+import { speakSequence, checkParlerAvailable, unlockAudio,
+         primePrerendered, prerenderedFile } from "../lib/speech.js";
 import { t } from "../i18n/strings.js";
 import {
   isASRAvailable, checkASRAvailable, ASR_URL,
@@ -20,7 +21,7 @@ const STALL_MS = 20000;
  *      service, so it is the fallback rather than the default.
  * Then /interpret maps the words to an intent and a reply, and speech.js speaks it.
  */
-export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = "" }) {
+export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = "", advisoryKn = "" }) {
   lang = normalizeSpeechLang(lang);
   const [asr, setAsr] = useState(isASRAvailable() ? true : null); // null = still probing
   const [state, setState] = useState("idle"); // idle | listening | processing | done
@@ -33,6 +34,7 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
   const browserTranscriptRef = useRef("");
   const chunksRef = useRef([]);
   const stallRef = useRef(null);
+  const clipRef = useRef(null);   // real <audio> in the DOM — see Speak.jsx
 
   useEffect(() => {
     checkASRAvailable().then(setAsr).catch(() => setAsr(false));
@@ -55,40 +57,59 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
     stallRef.current = setTimeout(() => fail(message), STALL_MS);
   };
 
-  // The local server is preferred: it is this project's own model, it needs no internet,
-  // and it is the one we can actually keep running for a demo.
-  const useLocalASR = asr === true;
+  // Browser recognition streams and returns in well under a second; IndicConformer on
+  // CPU takes several. Prefer the fast one and keep the local server as the fallback —
+  // the watchdog below is what makes that safe when the browser service goes quiet.
+  const useLocalASR = !browserSpeechRecognition() && asr === true;
   if (asr === null) return null;                              // still probing
   if (!useLocalASR && !browserSpeechRecognition()) return null; // no way to listen at all
 
-  // What to say back. "repeat" means read the page; every other intent already has its
-  // own reply, and for "advisory" that reply IS the CRIDA advice — reading the whole page
-  // on top of it just made the answer long enough to need a pre-rendered clip to hide it.
-  const spokenFor = (data) =>
-    data.action === "repeat" ? (pageDescription || data.reply_text || "") : (data.reply_text || "");
+  // What to say back, in order. The reply goes first because for "advisory" it is the
+  // CRIDA action and plays instantly from a pre-rendered clip; the page narration follows
+  // so the farmer hears this screen's own numbers without pressing anything else.
+  const spokenFor = (data) => {
+    if (data.action === "repeat") return [pageDescription || data.reply_text || ""];
+    const reply = data.reply_text || "";
+    if (!(data.action === "advisory" || data.action === "unknown")) return [reply].filter(Boolean);
+    // Today's narration already ends with the same CRIDA sentence the reply uses. Say the
+    // reply first because it plays instantly from a clip, then the rest of the page once.
+    const bare = reply.replace(/[.।]+$/, "").trim();
+    const rest = bare && pageDescription.includes(bare)
+      ? pageDescription.replace(bare, "").replace(/\s+/g, " ").trim()
+      : pageDescription;
+    return [reply, rest].filter(Boolean);
+  };
 
   const finishTranscript = async (heard) => {
     if (!heard.trim()) {
       fail("I could not hear a clear answer. Please try again.");
       return;
     }
+    // This screen's own advisory, spoken immediately. /interpret only ever returns the
+    // same sentence back, so waiting for that round trip before making a sound is pure
+    // delay — the clip starts now and the text fills in behind it.
+    const played = Boolean(clipRef.current);   // the clip already started on release
     try {
       const data = await interpretTranscript(heard, lang);
       clearStall();
       setTranscript(data.transcript || heard);
       setReply(data.reply_text || "");
       setState("done");
-      const spokenResponse = spokenFor(data);
-      if (spokenResponse) {
-        await checkParlerAvailable();
-        await speak(spokenResponse, lang);
-      }
+      checkParlerAvailable();
+      const lines = spokenFor(data);
+      // The clip already covered the first line; do not say it twice.
+      speakSequence(played ? lines.slice(1) : lines, lang);
     } catch {
       fail("Could not understand the recording. Please try again.");
     }
   };
 
   const startRecording = async () => {
+    // Must run synchronously on the press: by the time the reply arrives the gesture
+    // has expired and Chrome refuses to start an AudioContext, which is exactly how
+    // the assistant ended up returning success while making no sound at all.
+    unlockAudio();
+    primePrerendered();   // must be on the press — see speech.js
     setError("");
     setTranscript("");
     setReply("");
@@ -154,6 +175,13 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
   };
 
   const stopRecording = async () => {
+    // First statement, inside the pointer-up handler, nothing awaited before it. This
+    // is the demo's answer and the only arrangement a browser will not refuse.
+    const el = clipRef.current;
+    if (el) {
+      try { el.currentTime = 0; } catch { /* not seekable yet */ }
+      el.play().catch(() => {});
+    }
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setState("processing");
@@ -203,11 +231,8 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
       setTranscript(data.transcript);
       setReply(data.reply_text || "");
       setState("done");
-      const spokenResponse = spokenFor(data);
-      if (spokenResponse) {
-        await checkParlerAvailable();
-        await speak(spokenResponse, lang);
-      }
+      checkParlerAvailable();
+      speakSequence(spokenFor(data), lang);
     } catch {
       fail("Could not reach the speech server on this machine.");
     }
@@ -221,12 +246,15 @@ export default function VoiceAssistant({ lang = "kn", areaId, pageDescription = 
     setState("idle");
   };
 
+  const clipFile = prerenderedFile(advisoryKn, lang);
   const isListening = state === "listening";
   const isProcessing = state === "processing";
   const isDone = state === "done";
 
   return (
     <div style={{ marginTop: 20, borderTop: "1px solid var(--rule2)", paddingTop: 16 }}>
+      {clipFile ? <audio ref={clipRef} src={clipFile} preload="auto" /> : null}
+
       {/* Header row */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
         <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".08em",

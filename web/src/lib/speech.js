@@ -8,6 +8,8 @@ const SUPPORTED_LANGS = new Set(Object.keys(SPEECH_LANG));
 let _parlerAvailable = null;
 let _healthRequest = null;
 let _currentSource = null;
+let _currentEl = null;   // HTMLAudioElement fallback when Web Audio is blocked
+let _endWaiters = [];
 let _audioCtx = null;
 let _speechGeneration = 0;
 const _audioCache = new Map();
@@ -27,14 +29,63 @@ function _audioKey(text, lang) { return `tts-v3\u0000${lang}\u0000${text}`; }
 // The key is the EXACT sentence the clip speaks. That is the whole safety property: if
 // the forecast changes and the advisory text changes with it, the key stops matching and
 // synthesis takes over. A stale clip can never speak advice the screen is not showing.
+// `kind` says what the clip is allowed to be, and the tests enforce it:
+//   advisory  — must be a sentence some CRIDA rule actually emits
+//   narration — generated from the live bulletin by scripts/prerender_narration.py,
+//               so it can only ever be what the screen itself computed
 const PRERENDERED = [
-  { lang: "kn", file: "/demo_crida.wav",
+  { lang: "kn", kind: "advisory", file: "/demo_crida.wav",
     text: "ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಿ, ಈ ವಾರ ಮಳೆಯ ಅಗತ್ಯವಿರುವ ಕೆಲಸ ಮುಂದೂಡಿ" },
+  { lang: "kn", kind: "narration", file: "/narration_today_kn.wav",
+    text: "Kasaba, Tumakuru. ಮಳೆ ಬರುವುದು ಖಚಿತವಿಲ್ಲ. ಬಿತ್ತನೆಗೆ ಸ್ವಲ್ಪ ಕಾಯಿರಿ. ಕಳೆದ 10 ವರ್ಷಗಳಲ್ಲಿ 5 ವರ್ಷ ಇದೇ ಸಮಯಕ್ಕೆ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು. ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಿ, ಈ ವಾರ ಮಳೆಯ ಅಗತ್ಯವಿರುವ ಕೆಲಸ ಮುಂದೂಡಿ" },
+  { lang: "kn", kind: "narration", file: "/narration_why_kn.wav",
+    text: "ಕಳೆದ 5 ವರ್ಷಗಳ ಮಳೆ ದಾಖಲೆಯನ್ನು ಇಂದಿನ ಸ್ಥಿತಿಯ ಜೊತೆ ಹೋಲಿಸಿದ್ದೇವೆ. ಹತ್ತರಲ್ಲಿ 5 ವರ್ಷ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು. ಈ ಆ್ಯಪ್ 1ನೇ ವಾರದವರೆಗೆ ಮಾತ್ರ ಏನು ಮಾಡಬೇಕೆಂದು ಹೇಳುತ್ತದೆ. ಅದರ ನಂತರ ಅಂದಾಜು ಮಾತ್ರ. ಈ ಹೋಬಳಿಯ 34 ವರ್ಷಗಳ ಐಎಂಡಿ ಮಳೆ ದಾಖಲೆ, ಮುಂದಿನ ನಾಲ್ಕು ವಾರಗಳಿಗೆ 51 ಇಸಿಎಂಡಬ್ಲ್ಯೂಎಫ್ ಮಾದರಿ ಓಟಗಳು, ಮತ್ತು ಬೆಳೆ ಸಲಹೆಗೆ ಐಸಿಎಆರ್-ಕ್ರಿಡಾ ಜಿಲ್ಲಾ ಯೋಜನೆ." },
 ];
 
 // Trailing punctuation differs between the rules engine and the ASR server's reply
 // ("...ಮುಂದೂಡಿ" vs "...ಮುಂದೂಡಿ."); nothing else is allowed to differ.
 const _norm = (t) => String(t || "").replace(/\s+/g, " ").trim().replace(/[.।]+$/, "");
+
+// A browser only lets audio start from a user gesture. The assistant's reply arrives
+// several awaits later, by which time the gesture is gone and play() is refused — which
+// is why the clip existed and was never heard. So: build the element ON the press, play
+// and immediately pause it (that is what marks it unlocked), and keep it. Playing it
+// later then needs no gesture at all.
+const _primed = new Map();
+
+export function primePrerendered() {
+  for (const clip of PRERENDERED) {
+    let el = _primed.get(clip.file);
+    if (!el) {
+      el = new Audio(clip.file);
+      el.preload = "auto";
+      _primed.set(clip.file, el);
+    }
+    el.play().then(() => { el.pause(); el.currentTime = 0; }).catch(() => {});
+  }
+}
+
+/** Play a pre-rendered clip for this exact sentence right now. -> true if it started. */
+export function playPrerenderedNow(text, lang = "kn") {
+  const clip = _prerendered(text, lang);
+  if (!clip) return false;
+  const el = _primed.get(clip.file) || new Audio(clip.file);
+  _primed.set(clip.file, el);
+  stopSpeech();
+  try { el.currentTime = 0; } catch { /* not seekable yet */ }
+  el.play().catch(() => {});
+  el.addEventListener("ended", () => { if (_currentEl === el) { _currentEl = null; _signalEnd(); } },
+    { once: true });
+  _currentEl = el;
+  return true;
+}
+
+/** The clip file for this exact sentence, or null. Exact only: a clip that merely
+ *  appears inside a longer narration would speak one line and drop the rest. */
+export function prerenderedFile(text, lang = "kn") {
+  const clip = _prerendered(text, lang);
+  return clip ? clip.file : null;
+}
 
 function _prerendered(text, lang) {
   const want = _norm(text);
@@ -95,8 +146,52 @@ async function _fetchParlerAudio(text, lang) {
   return request;
 }
 
+/** Sentences, in reading order. Indic Parler-TTS cost grows steeply with length — a
+ *  180-character narration does not return in a usable time, while its individual
+ *  sentences do — so nothing hands the synthesizer a whole paragraph. */
+export function splitSentences(text) {
+  return String(text || "").split(/(?<=[.।?])\s+/).map((x) => x.trim()).filter(Boolean);
+}
+
+/** Warm the first sentence first: that is the one standing between a press and a sound.
+ *  The rest are queued behind it so they are ready by the time playback reaches them. */
 export function preloadSpeech(text, lang = "kn") {
-  if (text) _fetchParlerAudio(text, normalizeLang(lang)).catch(() => {});
+  const parts = splitSentences(text);
+  if (!parts.length) return Promise.resolve();
+  const l = normalizeLang(lang);
+  return _fetchParlerAudio(parts[0], l)
+    .then(() => Promise.all(parts.slice(1).map((x) => _fetchParlerAudio(x, l).catch(() => null))))
+    .catch(() => null);
+}
+
+// Chrome only lets an AudioContext start from a user gesture. The assistant's reply
+// arrives several awaits after the press, by which time the gesture has expired and
+// source.start() succeeds silently. Call this ON the press instead.
+// speak() returns when playback STARTS, so speaking two lines in a row would have the
+// second cut off the first. These let a caller wait for the audio to actually finish.
+function _signalEnd() { _endWaiters.splice(0).forEach((resolve) => resolve()); }
+
+function _waitForEnd() {
+  if (!_currentSource && !_currentEl && !window.speechSynthesis?.speaking) return Promise.resolve();
+  return new Promise((resolve) => _endWaiters.push(resolve));
+}
+
+/** Speak several lines back to back, each starting only once the last has finished. */
+export async function speakSequence(lines, lang = "kn") {
+  for (const line of lines) {
+    if (!line) continue;
+    const generation = _speechGeneration + 1;   // speak() bumps it via stopSpeech()
+    if (!(await speak(line, lang))) continue;
+    if (generation !== _speechGeneration) return false;  // something newer interrupted us
+    await _waitForEnd();
+  }
+  return true;
+}
+
+export function unlockAudio() {
+  const ctx = _getAudioCtx();
+  if (ctx && ctx.state === "suspended") ctx.resume().catch(() => {});
+  return ctx ? ctx.state : "none";
 }
 
 function _getAudioCtx() {
@@ -111,15 +206,37 @@ function _getAudioCtx() {
 async function _playWav(bytes, generation) {
   const ctx = _getAudioCtx();
   if (!ctx) return false;
-  if (ctx.state === "suspended") await ctx.resume();
+  if (ctx.state === "suspended") {
+    // resume() can sit unresolved forever when the gesture has expired; race it.
+    await Promise.race([ctx.resume().catch(() => {}), new Promise((r) => setTimeout(r, 300))]);
+    if (ctx.state === "suspended") return false;   // blocked — let the caller fall back
+  }
   const buffer = await ctx.decodeAudioData(bytes.slice(0));
   if (generation !== _speechGeneration) return false;
   const source = ctx.createBufferSource();
   source.buffer = buffer;
   source.connect(ctx.destination);
-  source.onended = () => { if (_currentSource === source) _currentSource = null; };
+  source.onended = () => { if (_currentSource === source) { _currentSource = null; _signalEnd(); } };
   source.start(0);
   _currentSource = source;
+  return true;
+}
+
+/** Last resort for a clip: HTMLAudioElement, whose autoplay rules are laxer than
+ *  Web Audio's. Tracked in _currentEl so stopSpeech/pause/resume still control it. */
+async function _playFile(url, generation, onDone) {
+  const el = new Audio(url);
+  try {
+    await el.play();
+  } catch {
+    return false;
+  }
+  if (generation !== _speechGeneration) { el.pause(); onDone?.(); return false; }
+  el.addEventListener("ended", () => {
+    if (_currentEl === el) { _currentEl = null; _signalEnd(); }
+    onDone?.();
+  }, { once: true });
+  _currentEl = el;
   return true;
 }
 
@@ -155,6 +272,8 @@ async function _browserSpeak(text, lang) {
   utterance.lang = voice.lang || SPEECH_LANG[lang];
   utterance.voice = voice;
   utterance.rate = 0.88;
+  utterance.onend = _signalEnd;
+  utterance.onerror = _signalEnd;
   window.speechSynthesis.speak(utterance);
   return true;
 }
@@ -174,8 +293,11 @@ export async function speak(text, lang = "kn") {
       const pre = await _fetchPrerendered(clip);
       if (generation === _speechGeneration && await _playWav(pre, generation)) return "prerendered";
     } catch {
-      // the file is missing or undecodable — synthesise it instead of going silent
+      // missing or undecodable — fall through
     }
+    if (generation !== _speechGeneration) return false;
+    // Web Audio was blocked. The clip is a real file, so play it the plain way.
+    if (await _playFile(clip.file, generation)) return "prerendered";
     if (generation !== _speechGeneration) return false;
   }
 
@@ -184,6 +306,13 @@ export async function speak(text, lang = "kn") {
   const bytes = await _fetchParlerAudio(text, lang);
   if (bytes && generation === _speechGeneration) {
     try { if (await _playWav(bytes, generation)) return "parler"; } catch { /* fallback below */ }
+    if (generation !== _speechGeneration) return false;
+    // Web Audio refused — almost always because synthesis took long enough for the
+    // click to stop counting as a user gesture. An <audio> element is allowed where
+    // an AudioContext is not, so the same bytes still get heard.
+    const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+    if (await _playFile(url, generation, () => URL.revokeObjectURL(url))) return "parler";
+    URL.revokeObjectURL(url);
   }
   if (generation !== _speechGeneration) return false;
   return (await _browserSpeak(text, lang)) ? "browser" : false;
@@ -199,15 +328,22 @@ export function stopSpeech() {
     try { _currentSource.stop(); } catch { /* already ended */ }
     _currentSource = null;
   }
+  if (_currentEl) {
+    try { _currentEl.pause(); } catch { /* already ended */ }
+    _currentEl = null;
+  }
   if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
+  _signalEnd();   // anything waiting on the old audio must not hang forever
 }
 
 export function pauseSpeech() {
+  if (_currentEl) _currentEl.pause();
   if (_currentSource && _audioCtx) _audioCtx.suspend().catch(() => {});
   if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.pause();
 }
 
 export function resumeSpeech() {
+  if (_currentEl) _currentEl.play().catch(() => {});
   if (_audioCtx?.state === "suspended") _audioCtx.resume().catch(() => {});
   if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.resume();
 }

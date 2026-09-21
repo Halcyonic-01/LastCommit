@@ -383,9 +383,10 @@ def _prerendered_clips() -> list[dict]:
     js = (ROOT / "web" / "src" / "lib" / "speech.js").read_text(encoding="utf-8")
     block = re.search(r"const PRERENDERED = \[(.*?)\n\];", js, re.S)
     assert block, "PRERENDERED table missing from speech.js"
-    return [{"lang": m.group(1), "file": m.group(2), "text": m.group(3)} for m in
-            re.finditer(r'\{\s*lang:\s*"([^"]+)",\s*file:\s*"([^"]+)",\s*\n?\s*text:\s*"([^"]+)"',
-                        block.group(1))]
+    return [{"lang": m.group(1), "kind": m.group(2), "file": m.group(3), "text": m.group(4)}
+            for m in re.finditer(
+                r'\{\s*lang:\s*"([^"]+)",\s*kind:\s*"([^"]+)",\s*file:\s*"([^"]+)",'
+                r'\s*\n?\s*text:\s*"([^"]+)"', block.group(1))]
 
 
 def test_every_prerendered_clip_ships_the_file_it_names():
@@ -396,13 +397,25 @@ def test_every_prerendered_clip_ships_the_file_it_names():
         assert f.exists(), f"{c['file']} is referenced but not in web/public"
 
 
-def test_a_prerendered_clip_may_only_speak_real_crida_advice():
-    """The clip is audio a listener cannot check against the screen, so it must be a
-    sentence the rules engine can actually emit — never hand-written advice."""
+def test_an_advisory_clip_may_only_speak_real_crida_advice():
+    """A clip is audio a listener cannot check against the screen. One that stands in for
+    the advisory must therefore be a sentence the rules engine can actually emit."""
     packs = E.load_rules()
     real_kn = {r.action_kn.strip() for rules in packs.values() for r in rules}
     for c in _prerendered_clips():
-        if c["lang"] != "kn":
+        if c["lang"] != "kn" or c["kind"] != "advisory":
             continue
         assert c["text"].strip() in real_kn, (
             f"pre-rendered clip {c['file']} speaks text no CRIDA rule produces: {c['text']}")
+
+
+def test_a_narration_clip_still_ends_on_the_live_crida_action():
+    """A whole-screen narration is not one rule's sentence, but Today's narration ends
+    with the advisory — so that much must still be text a rule really produces."""
+    packs = E.load_rules()
+    real_kn = {r.action_kn.strip() for rules in packs.values() for r in rules}
+    for c in _prerendered_clips():
+        if c["kind"] != "narration" or "today" not in c["file"]:
+            continue
+        assert any(c["text"].strip().endswith(a) for a in real_kn), (
+            f"{c['file']} does not end on any CRIDA action the engine emits")

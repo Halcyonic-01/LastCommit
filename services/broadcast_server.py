@@ -154,6 +154,15 @@ class Handler(BaseHTTPRequestHandler):
 
         # Which provider each channel actually resolves to right now. No PII, and it is
         # what the console reads to label WhatsApp as simulated before anyone sends.
+        # The farmer's own read. No passcode and no PII — exactly the trust level the
+        # anon-readable farmer_messages table has, so the PWA can fall back to it.
+        if self.path.startswith("/api/farmer-messages"):
+            area_id = self._params().get("areaId", "")
+            if not AREA_ID_RE.match(area_id):
+                return self._json(400, {"error": "invalid or missing areaId"})
+            rows, backend = NS.messages_for(area_id, limit=30)
+            return self._json(200, {"backend": backend, "messages": rows})
+
         if self.path == "/api/notification-channels":
             return self._json(200, {"channels": NP.channel_status(),
                                     "duplicate_window_hours": ND.DUPLICATE_WINDOW_HOURS})

@@ -10,7 +10,7 @@ import Tabs from "../components/Tabs.jsx";
 import { Shell, Msg, Rubric } from "../components/Frame.jsx";
 import { Back } from "../components/Marks.jsx";
 import LangSwitch from "../components/LangSwitch.jsx";
-import VoiceAssistant from "../components/VoiceAssistant.jsx";
+import { whyNarration } from "../lib/narration.js";
 
 export default function Why() {
   const nav = useNavigate();
@@ -32,7 +32,7 @@ export default function Why() {
   const members = d.provenance_summary?.match(/(\d+)\s+ensemble members/)?.[1] ?? null;
   const horizon = advisoryHorizon(d.skill);
 
-  const spoken = `${tpl("whySpoken", lang, seasons ?? "several", ten)} ${tpl("outlookNote", lang, horizon)}`;
+  const spoken = whyNarration(d, lang);
 
   return (
     <Shell>
@@ -72,7 +72,6 @@ export default function Why() {
               </span>
             </div>
 
-            <VoiceAssistant lang={lang} pageDescription={spoken} />
 
             {/* A figure, captioned like a figure in a printed report. */}
             <figure style={{ margin: "26px 0 0" }}>

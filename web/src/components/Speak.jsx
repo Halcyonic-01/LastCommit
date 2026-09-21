@@ -1,9 +1,14 @@
-import { useState, useEffect } from "react";
-import { speak, preloadSpeech, canSpeak, pauseSpeech, resumeSpeech, stopSpeech, isParlerAvailable, checkParlerAvailable } from "../lib/speech.js";
+import { useState, useEffect, useRef } from "react";
+import { speak, speakSequence, splitSentences, preloadSpeech, canSpeak, pauseSpeech, resumeSpeech, stopSpeech, isParlerAvailable, checkParlerAvailable, unlockAudio, prerenderedFile } from "../lib/speech.js";
 import { Speaker, Pause, Play } from "./Marks.jsx";
 import { t } from "../i18n/strings.js";
 
 export default function Speak({ text, lang = "kn", variant = "pill", onPhoto = false }) {
+  // A real <audio> element, in the DOM, pointed at a file we shipped. Playing it is the
+  // first statement of the click handler with nothing awaited before it, which is the
+  // only arrangement no autoplay policy can refuse. Everything else is the fallback.
+  const clip = prerenderedFile(text, lang);
+  const clipRef = useRef(null);
   const [isPaused, setIsPaused] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [hd, setHd] = useState(isParlerAvailable());
@@ -26,21 +31,36 @@ export default function Speak({ text, lang = "kn", variant = "pill", onPhoto = f
   const label = `${t("listen", lang)} — listen`;
 
   const handleSpeak = async () => {
+    const el = clipRef.current;
+    if (el) {
+      try { el.currentTime = 0; } catch { /* not seekable yet */ }
+      el.play().catch(() => {});      // synchronous: still inside the click
+      setIsPaused(false);
+      return;
+    }
+    // Synthesis can take several seconds, and by the time the audio arrives this click
+    // no longer counts as a user gesture — so open the audio device now, not then.
+    unlockAudio();
     setIsPaused(false);
     setIsPlaying(true);
-    await speak(text, lang);
+    // One sentence at a time: the first plays while the rest are still being made,
+    // instead of the farmer waiting for the whole paragraph before hearing anything.
+    await speakSequence(splitSentences(text), lang);
     setIsPlaying(false);
   };
 
   const handleToggle = () => {
+    const el = clipRef.current;
     if (isPaused) {
-      resumeSpeech();
+      if (el) el.play().catch(() => {}); else resumeSpeech();
       setIsPaused(false);
     } else {
-      pauseSpeech();
+      if (el) el.pause(); else pauseSpeech();
       setIsPaused(true);
     }
   };
+
+  const Clip = clip ? <audio ref={clipRef} src={clip} preload="auto" /> : null;
 
   const Icon = isPaused ? Play : Pause;
   const toggleLabel = isPaused ? "Resume" : "Pause";
@@ -60,6 +80,7 @@ export default function Speak({ text, lang = "kn", variant = "pill", onPhoto = f
   if (variant === "icon") {
     return (
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {Clip}
         <button type="button" className={`speak-ico${cls}`} onClick={handleSpeak}
           aria-label={label} disabled={isPlaying}>
           <Speaker size={22} />{HdBadge}
@@ -72,6 +93,7 @@ export default function Speak({ text, lang = "kn", variant = "pill", onPhoto = f
   }
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      {Clip}
       <button type="button" className={`speak${cls}`} onClick={handleSpeak}
         aria-label={label} disabled={isPlaying}>
         <Speaker size={20} /> {t("listen", lang)}{HdBadge}

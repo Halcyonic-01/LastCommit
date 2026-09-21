@@ -2,7 +2,6 @@ import { useState } from "react";
 import { loadPrefs, queueReport, flushOutbox } from "../lib/store.js";
 import { S, t, pick } from "../i18n/strings.js";
 import Photo from "../components/Photo.jsx";
-import Speak from "../components/Speak.jsx";
 import Tabs from "../components/Tabs.jsx";
 import { Shell } from "../components/Frame.jsx";
 import { Tick } from "../components/Marks.jsx";
@@ -78,7 +77,6 @@ export default function RainReport() {
           <div className="kn" style={{ fontSize: 27, fontWeight: 800, lineHeight: 1.15 }}>{ask}</div>
           <div className="gloss" style={{ marginTop: 2 }}>{S.didItRain.en} Tap one.</div>
         </div>
-        <Speak text={ask} lang={lang} variant="icon" />
       </div>
 
       {/* Three plates. Each fills a third of the screen — impossible to mis-tap

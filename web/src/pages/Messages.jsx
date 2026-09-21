@@ -6,7 +6,7 @@ import { t } from "../i18n/strings.js";
 import Tabs from "../components/Tabs.jsx";
 import { Shell, Msg } from "../components/Frame.jsx";
 import { Back } from "../components/Marks.jsx";
-import { markMessagesSeen } from "../lib/messages.js";
+import { markMessagesSeen, fetchMessages } from "../lib/messages.js";
 
 const LIMIT = 30;
 
@@ -33,15 +33,9 @@ export default function Messages() {
   const [rows, setRows] = useState(null);   // null = loading
 
   useEffect(() => {
-    if (!supabase) { setRows([]); return; }
-    supabase.from("farmer_messages").select("*").eq("area_id", areaId)
-      .order("created_at", { ascending: false }).limit(LIMIT)
-      .then(({ data, error }) => {
-        // A farmer must never read a Postgres error. Whatever went wrong, the screen
-        // says "no messages yet"; the operator sees the real reason on the send side.
-        if (error) { console.warn("farmer_messages:", error.message); setRows([]); return; }
-        setRows(data || []);
-      });
+    let live = true;
+    fetchMessages(supabase, areaId, LIMIT).then((r) => { if (live) setRows(r); });
+    return () => { live = false; };
   }, [areaId]);
 
   // Opening the page is reading it — clear the badge on the way in, not on the way out,

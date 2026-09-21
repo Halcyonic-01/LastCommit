@@ -40,6 +40,8 @@ def isolated_store(tmp_path, monkeypatch):
     monkeypatch.setattr(NS.SB, "update_notification", lambda nid, patch: None)
     monkeypatch.setattr(NS.SB, "fetch_notification", lambda nid: None)
     monkeypatch.setattr(NP.SB, "insert_farmer_message", lambda row: {"id": "fm-stub", **row})
+    monkeypatch.setattr(NS.SB, "fetch_farmer_messages", lambda area_id, limit=30: None)
+    monkeypatch.setattr(NS, "LOCAL_MESSAGES", tmp_path / "farmer_messages.jsonl")
 
 
 @pytest.fixture
@@ -117,11 +119,24 @@ def test_an_inapp_send_needs_no_subscribers_at_all(monkeypatch):
     assert ND.dispatch(REAL_AREA, "inapp")["sent"] == 1
 
 
-def test_an_inapp_send_fails_readably_when_supabase_cannot_take_it(monkeypatch):
+def test_an_inapp_send_still_delivers_when_supabase_cannot_take_it(monkeypatch, tmp_path):
+    """The officer -> farmer loop must work on one machine before the SQL has been run.
+    It still says which store took it, because a file only reaches this machine's app."""
+    monkeypatch.setattr(NS, "LOCAL_MESSAGES", tmp_path / "farmer_messages.jsonl")
     monkeypatch.setattr(NP.SB, "insert_farmer_message", lambda row: None)
     r = ND.dispatch(REAL_AREA, "inapp")
-    assert r["sent"] == 0 and r["failed"] == 1
+    assert r["sent"] == 1 and r["failed"] == 0
     assert "supabase.sql" in r["results"][0]["error"].lower()
+    rows, backend = NS.messages_for(REAL_AREA)
+    assert backend == "file" and len(rows) == 1
+    assert rows[0]["body"] and rows[0]["source_table"]
+
+
+def test_the_farmer_read_prefers_supabase_when_it_answers(monkeypatch):
+    monkeypatch.setattr(NS.SB, "fetch_farmer_messages",
+                        lambda area_id, limit=30: [{"id": "x", "area_id": area_id, "body": "hi"}])
+    rows, backend = NS.messages_for(REAL_AREA)
+    assert backend == "supabase" and rows[0]["body"] == "hi"
 
 
 def test_a_channel_with_no_provider_at_all_fails_honestly():
