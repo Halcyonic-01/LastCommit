@@ -41,14 +41,16 @@ def client() -> Any | None:
     return create_client(url, key)
 
 
-def fetch_subscribers(channel: str | None = None) -> list[dict]:
-    """Active subscribers, optionally filtered to one channel. [] if unconfigured."""
+def fetch_subscribers(channel: str | None = None, area_id: str | None = None) -> list[dict]:
+    """Active subscribers, optionally filtered to one channel and/or one area. [] if unconfigured."""
     sb = client()
     if sb is None:
         return []
     q = sb.table("subscribers").select("*").eq("active", True)
     if channel:
         q = q.eq("channel", channel)
+    if area_id:
+        q = q.eq("area_id", area_id)
     return q.execute().data or []
 
 

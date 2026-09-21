@@ -210,7 +210,7 @@ export default function Replay() {
           </div>
           {hover ? (
             <div style={{ position: "absolute", right: 16, top: 16, background: "rgba(20,23,26,.94)", border: "1px solid var(--rule2)", padding: "9px 12px" }}>
-              <div className="kn" style={{ fontSize: 15, fontWeight: 700 }}>{hover.name_kn || hover.name_en}</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{hover.name_en}</div>
               <div className="ops-mono" style={{ fontSize: 10.5, color: "var(--ink3)" }}>{hover.name_en} · {hover.district_en}</div>
               {latest?.areas[hover.area_id] ? (
                 <div className="ops-mono" style={{ fontSize: 10, color: "var(--ink3)", marginTop: 4 }}>

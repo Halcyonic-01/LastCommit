@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getIndex } from "../lib/api.js";
-import { loadPrefs, savePrefs } from "../lib/store.js";
-import { LANGS, S, t } from "../i18n/strings.js";
+import { loadPrefs, savePrefs, savedPhone, registerPhone } from "../lib/store.js";
+import { LANGS, S, t, pick } from "../i18n/strings.js";
 import Photo from "../components/Photo.jsx";
 import Speak from "../components/Speak.jsx";
 import { Shell } from "../components/Frame.jsx";
@@ -14,6 +14,7 @@ export default function Welcome() {
   const [lang, setLang] = useState(p0.lang);
   const [areaId, setAreaId] = useState(p0.areaId);
   const [areas, setAreas] = useState(null);
+  const [phone, setPhone] = useState(savedPhone());
 
   useEffect(() => { getIndex().then((d) => setAreas(d.areas)).catch(() => setAreas({})); }, []);
 
@@ -38,6 +39,9 @@ export default function Welcome() {
         district_kn: district?.name_kn ?? "",
       },
     });
+    // Fire-and-forget: optional, and onboarding must not wait on a network call that
+    // may never resolve on a slow connection. A failure just means try again later.
+    if (phone.length === 10) registerPhone({ digits: phone, areaId, lang });
     nav("/today");
   };
 
@@ -95,6 +99,21 @@ export default function Welcome() {
           <div className="gloss" style={{ marginTop: 6 }}>
             {list.length ? `${list.length} hoblis · your choice stays on this phone` : "loading hoblis…"}
           </div>
+        </div>
+
+        <div style={{ marginTop: 26 }}>
+          <div className="rubric">{t("phone", lang)} · <span style={{ opacity: .65 }}>{t("phoneOptional", lang)}</span></div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+            <span style={{ fontSize: 17, fontWeight: 600, color: "var(--ink2)" }}>+91</span>
+            <input type="tel" inputMode="numeric" autoComplete="tel-national" maxLength={10}
+              value={phone} onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+              placeholder="98765 43210" aria-label={t("phone", lang)}
+              style={{ flex: 1, minHeight: "var(--tap)", border: "1.5px solid var(--ink)", borderRadius: 2,
+                padding: "0 12px", fontSize: 17, background: "var(--paper2)" }} />
+          </div>
+          {/* Distinct from "stays on this phone" above — this field genuinely leaves it,
+              so it gets its own honest line rather than borrowing that reassurance. */}
+          <div className="gloss" style={{ marginTop: 6 }}>{pick(S.phoneNote, lang)}</div>
         </div>
 
         <div style={{ marginTop: "auto", paddingTop: 24 }}>

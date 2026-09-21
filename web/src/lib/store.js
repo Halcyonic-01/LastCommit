@@ -90,3 +90,48 @@ export async function flushOutbox() {
     flushing = false;
   }
 }
+
+// --- phone registration ------------------------------------------------------
+// Unlike prefs above, a submitted number is NOT device-only — it goes to Supabase
+// so services/whatsapp/send.py and services/sms/send.py can reach this farmer
+// directly. Kept out of the `vd.prefs.v2` blob so that blob's own "never sent
+// anywhere" contract stays true for what it actually describes.
+const PHONE_KEY = "vd.phone.v1";
+
+/** 10 local digits -> {whatsapp, sms} in each API's own required format — Meta wants
+ * no leading +, Twilio requires one. null if it's not 10 digits once cleaned. */
+export function normalizePhone(digits) {
+  const clean = String(digits ?? "").replace(/\D/g, "");
+  if (clean.length !== 10) return null;
+  return { whatsapp: `91${clean}`, sms: `+91${clean}` };
+}
+
+export function savedPhone() {
+  try {
+    return localStorage.getItem(PHONE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+/** Register a farmer's own number for both channels. Optional by design — every
+ * failure path (bad format, unconfigured Supabase, already registered, offline)
+ * returns a status rather than throwing, since onboarding must never block on this. */
+export async function registerPhone({ digits, areaId, lang }) {
+  if (savedPhone() === digits) return { status: "already-saved" };
+  const numbers = normalizePhone(digits);
+  if (!numbers) return { status: "bad-format" };
+  if (!supabase) return { status: "not-configured" };
+
+  const rows = [
+    { area_id: areaId, channel: "whatsapp", destination: numbers.whatsapp, lang, active: true },
+    { area_id: areaId, channel: "sms", destination: numbers.sms, lang, active: true },
+  ];
+  const { error } = await supabase.from("subscribers").insert(rows);
+  // 23505 = unique_violation (channel, destination) — this number is already in,
+  // which is the outcome we wanted, not a failure to surface.
+  if (error && error.code !== "23505") return { status: "failed" };
+
+  try { localStorage.setItem(PHONE_KEY, digits); } catch { /* best-effort only */ }
+  return { status: "saved" };
+}

@@ -14,6 +14,16 @@ export const S = {
   pickLang:   { kn: "ನಿಮ್ಮ ಭಾಷೆ ಒತ್ತಿ", hi: "अपनी भाषा चुनें", te: "మీ భాష ఎంచుకోండి", en: "Tap your language" },
   pickPlace:  { kn: "ನಿಮ್ಮ ಹೋಬಳಿ", hi: "आपका होबली", te: "మీ హోబళి", en: "Your hobli" },
   start:      { kn: "ಶುರು ಮಾಡಿ", hi: "शुरू करें", te: "ప్రారంభించండి", en: "Start" },
+
+  // Only field on this screen that leaves the phone — say so plainly, right next to
+  // "your choice stays on this phone" above it, not folded into the same promise.
+  phone:        { kn: "ಫೋನ್ ಸಂಖ್ಯೆ", hi: "फ़ोन नंबर", te: "ఫోన్ నంబర్", en: "Phone number" },
+  phoneOptional:{ kn: "ಐಚ್ಛಿಕ", hi: "वैकल्पिक", te: "ఐచ్ఛికం", en: "optional" },
+  // One sentence, not two — the first draft said "we'll message you" and "this leaves
+  // your phone" as separate lines, which just restated the same fact twice.
+  phoneNote:    { kn: "ಮೇಲಿನವುಗಳಂತಲ್ಲ, ಇದು ಈ ಫೋನ್ ಬಿಟ್ಟು ಹೋಗುತ್ತದೆ — WhatsApp ಅಥವಾ SMS ಮೂಲಕ ಸಂದೇಶ ಕಳುಹಿಸಲು.", hi: "ऊपर वालों के विपरीत, यह इस फ़ोन से बाहर जाता है — ताकि हम WhatsApp या SMS पर संदेश भेज सकें।", te: "పైవాటిలా కాకుండా, ఇది ఈ ఫోన్ నుండి బయటకు వెళుతుంది — WhatsApp లేదా SMS ద్వారా సందేశం పంపడానికి.", en: "Unlike your choices above, this leaves the phone — so we can message you on WhatsApp or SMS." },
+  phoneSaved:   { kn: "ಉಳಿಸಲಾಗಿದೆ — ಈ ಸಂಖ್ಯೆಗೆ ಸಂದೇಶ ಕಳುಹಿಸುತ್ತೇವೆ", hi: "सहेजा गया — इस नंबर पर संदेश भेजेंगे", te: "సేవ్ చేయబడింది — ఈ నంబర్‌కు సందేశం పంపుతాము", en: "Saved — we'll message this number" },
+  phoneFailed:  { kn: "ಉಳಿಸಲು ಆಗಲಿಲ್ಲ — ನಂತರ ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", hi: "सहेज नहीं सके — बाद में फिर कोशिश करें", te: "సేవ్ చేయలేకపోయాము — తర్వాత మళ్ళీ ప్రయత్నించండి", en: "Could not save — try again later" },
   listen:     { kn: "ಕೇಳಿ", hi: "सुनें", te: "వినండి", en: "Listen" },
   back:       { kn: "ಹಿಂದೆ", hi: "पीछे", te: "వెనుకకు", en: "Back" },
 
@@ -136,11 +146,16 @@ export const TPL = {
       ? `That is why this app only gives action through week ${h}. Anything after that is outlook only.`
       : `This app cannot give action for any week right now. Everything shown is outlook only.`,
   },
+  // Used to end with a fixed "trust this week and next" — true only when the
+  // advisory horizon happened to be 2. It's immediately followed by outlookNote,
+  // which already states the real (now 1-week) horizon correctly, so the two
+  // sentences read aloud contradicted each other. Cut rather than parametrized:
+  // outlookNote already owns that claim, and this template shouldn't duplicate it.
   whySpoken: {
-    kn: (y, n) => `ಕಳೆದ ${y} ವರ್ಷಗಳ ಮಳೆ ದಾಖಲೆಯನ್ನು ಇಂದಿನ ಸ್ಥಿತಿಯ ಜೊತೆ ಹೋಲಿಸಿದ್ದೇವೆ. ಹತ್ತರಲ್ಲಿ ${n} ವರ್ಷ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು. ಈ ವಾರ ಮತ್ತು ಮುಂದಿನ ವಾರ ನಂಬಬಹುದು.`,
-    hi: (y, n) => `हमने ${y} सालों का बारिश का रिकॉर्ड आज की स्थिति से मिलाया। दस में से ${n} साल एक हफ़्ते बारिश रुकी थी। इस हफ़्ते और अगले हफ़्ते पर भरोसा करें।`,
-    te: (y, n) => `మేము ${y} సంవత్సరాల వర్ష రికార్డును నేటి పరిస్థితితో పోల్చాము. పదిలో ${n} సంవత్సరాలు ఒక వారం వర్షం ఆగింది. ఈ వారం, వచ్చే వారం నమ్మవచ్చు.`,
-    en: (y, n) => `We compared ${y} years of rainfall records with today's conditions. In ${n} of 10 similar years the rain stopped for a week. Trust this week and next.`,
+    kn: (y, n) => `ಕಳೆದ ${y} ವರ್ಷಗಳ ಮಳೆ ದಾಖಲೆಯನ್ನು ಇಂದಿನ ಸ್ಥಿತಿಯ ಜೊತೆ ಹೋಲಿಸಿದ್ದೇವೆ. ಹತ್ತರಲ್ಲಿ ${n} ವರ್ಷ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು.`,
+    hi: (y, n) => `हमने ${y} सालों का बारिश का रिकॉर्ड आज की स्थिति से मिलाया। दस में से ${n} साल एक हफ़्ते बारिश रुकी थी।`,
+    te: (y, n) => `మేము ${y} సంవత్సరాల వర్ష రికార్డును నేటి పరిస్థితితో పోల్చాము. పదిలో ${n} సంవత్సరాలు ఒక వారం వర్షం ఆగింది.`,
+    en: (y, n) => `We compared ${y} years of rainfall records with today's conditions. In ${n} of 10 similar years the rain stopped for a week.`,
   },
 };
 

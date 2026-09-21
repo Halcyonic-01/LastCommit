@@ -3,13 +3,14 @@ import { Link } from "react-router-dom";
 import { getLatest, LEADS, advisoryHorizon } from "../lib/api.js";
 import { karteFor } from "../i18n/strings.js";
 import HazardMap, { DRY, WATER } from "../components/HazardMap.jsx";
+import BroadcastPanel from "../components/BroadcastPanel.jsx";
 
 const HAZARDS = [
   { key: "p_dry7",        label: "Dry spell 7d",  ramp: DRY,   note: "7 consecutive days under 2.5 mm" },
   { key: "p_dry14",       label: "Dry spell 14d", ramp: DRY,   note: "14 consecutive dry days" },
-  { key: "p_false_onset", label: "False onset",   ramp: DRY,   note: "rain starts, then stops for a week" },
+  { key: "p_false_onset", label: "False onset",   ramp: DRY,   note: "sowing rain, then a 10-day near-dry spell within 30 days" },
   { key: "p_onset",       label: "Onset",         ramp: WATER, note: "monsoon onset in this window" },
-  { key: "p_heavy",       label: "Heavy rain",    ramp: WATER, note: "daily total above the 95th percentile" },
+  { key: "p_heavy",       label: "Heavy rain",    ramp: WATER, note: "daily total ≥ 64.5 mm, IMD's heavy-rain day" },
 ];
 
 export default function Officer() {
@@ -19,6 +20,7 @@ export default function Officer() {
   const [hover, setHover] = useState(null);
   const [err, setErr] = useState(null);
   const [queued, setQueued] = useState([]);
+  const [reviewing, setReviewing] = useState(false);
 
   const H = HAZARDS.find((h) => h.key === hazard);
 
@@ -44,8 +46,10 @@ export default function Officer() {
       <header style={{ background: "var(--paper3)", borderBottom: "1px solid var(--rule2)", padding: "13px 20px", display: "flex",
         alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <div className="kn" style={{ fontSize: 21, fontWeight: 800, lineHeight: 1, color: "var(--ink)" }}>
-            ವರ್ಷದೃಷ್ಟಿ <span className="ops-mono" style={{ fontSize: 11, fontWeight: 400, color: "var(--ink3)", letterSpacing: ".1em" }}>OPERATIONS</span>
+          {/* Officer tools are English-only by design — language here is a job requirement,
+              not a preference, and never follows the farmer's own language choice. */}
+          <div style={{ fontSize: 21, fontWeight: 800, lineHeight: 1, color: "var(--ink)" }}>
+            VarshaDrishti <span className="ops-mono" style={{ fontSize: 11, fontWeight: 400, color: "var(--ink3)", letterSpacing: ".1em" }}>OPERATIONS</span>
           </div>
           <div className="ops-mono" style={{ fontSize: 11, color: "var(--ink2)", marginTop: 4 }}>
             KARNATAKA · {latest ? Object.keys(latest.areas).length : "—"} AREAS · RUN {latest?.provenance?.nwp?.run_date ?? "—"} · {latest?.meta?.model_version ?? ""}
@@ -112,8 +116,8 @@ export default function Officer() {
           </div>
           {hover ? (
             <div style={{ position: "absolute", right: 16, top: 16, background: "rgba(20,23,26,.94)", border: "1px solid var(--rule2)", padding: "9px 12px" }}>
-              <div className="kn" style={{ fontSize: 15, fontWeight: 700 }}>{hover.name_kn || hover.name_en}</div>
-              <div className="ops-mono" style={{ fontSize: 10.5, color: "var(--ink3)" }}>{hover.name_en} · {hover.district_en}</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{hover.name_en}</div>
+              <div className="ops-mono" style={{ fontSize: 10.5, color: "var(--ink3)" }}>{hover.district_en}</div>
             </div>
           ) : null}
         </div>
@@ -145,9 +149,8 @@ export default function Officer() {
                         <input type="checkbox" checked={on} onChange={() => toggle(a.area_id)}
                           aria-label={`Queue ${a.name_en} for broadcast`} style={{ accentColor: "var(--water2)", width: 16, height: 16 }} />
                       </td>
-                      <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--rule)" }}>
-                        <span className="kn" style={{ fontWeight: 700 }}>{a.name_kn || a.name_en}</span>
-                        <span className="ops-mono" style={{ color: "var(--ink3)", fontSize: 10.5 }}> {a.name_en}</span>
+                      <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--rule)", fontWeight: 700 }}>
+                        {a.name_en}
                       </td>
                       <td className="ops-mono" style={{ padding: "6px 10px", borderBottom: "1px solid var(--rule)", color: "var(--ink2)", fontSize: 11 }}>{a.district_en}</td>
                       <td style={{ padding: "6px 10px", borderBottom: "1px solid var(--rule)", minWidth: 96 }}>
@@ -175,7 +178,7 @@ export default function Officer() {
         <div className="ops-mono" style={{ fontSize: 11.5, color: "var(--ink2)" }}>
           {queued.length} TALUK{queued.length === 1 ? "" : "S"} QUEUED
         </div>
-        <button type="button" disabled={!queued.length || beyond}
+        <button type="button" disabled={!queued.length || beyond} onClick={() => setReviewing(true)}
           style={{ padding: "11px 20px", fontSize: 13, fontWeight: 700, background: queued.length && !beyond ? "var(--water2)" : "var(--paper3)",
             color: queued.length && !beyond ? "var(--paper2)" : "var(--ink3)", border: "none" }}>
           Review broadcast →
@@ -184,6 +187,17 @@ export default function Officer() {
           {beyond ? "blocked past the advisory horizon" : "opens a preview in Kannada before anything is sent"}
         </div>
       </div>
+
+      {reviewing ? (
+        <BroadcastPanel
+          areaIds={queued}
+          areaNames={queued.map((id) => latest?.areas?.[id]?.name_en ?? id)}
+          event={hazard}
+          lead={LEADS[lead]}
+          onClose={() => setReviewing(false)}
+          onSent={() => { setQueued([]); setReviewing(false); }}
+        />
+      ) : null}
 
       {err ? <div style={{ padding: 16, color: "var(--risk)" }}>Could not load forecast: {err}</div> : null}
       <style>{`@media (min-width: 1040px){ .ops-grid { grid-template-columns: minmax(0,1.25fr) minmax(0,1fr) !important; } }`}</style>

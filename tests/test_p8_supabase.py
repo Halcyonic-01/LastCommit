@@ -5,6 +5,7 @@ when Supabase isn't configured — a fresh clone with no .env has to keep workin
 as it did before this integration existed.
 """
 
+import importlib.util
 import re
 import sys
 from pathlib import Path
@@ -17,6 +18,20 @@ sys.path.insert(0, str(ROOT / "src"))
 SQL = (ROOT / "schema" / "supabase.sql").read_text()
 
 
+def _load(name: str, path: Path):
+    """Load a module under an explicit name, bypassing sys.modules.
+
+    services/telegram/send.py and services/whatsapp/send.py share the basename
+    'send' — a plain `import send` in two tests would silently return whichever
+    one happened to be cached first. Loading each by its file path under a
+    distinct name sidesteps that collision entirely.
+    """
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
 def test_schema_defines_all_three_tables():
     for table in ("rain_reports", "subscribers", "broadcasts"):
         assert re.search(rf"create table if not exists {table}", SQL), f"{table} missing"
@@ -26,18 +41,27 @@ def test_schema_enables_row_level_security_on_all_three():
     assert SQL.count("enable row level security") == 3
 
 
-def test_only_rain_reports_grants_anon_access():
-    """subscribers (phone numbers) and broadcasts (audit log) must stay service-role only."""
-    # each block runs from its own table's CREATE to the next table's
+def test_broadcasts_grants_no_anon_access():
+    """broadcasts (the send audit log) must stay service-role only, unlike subscribers."""
+    bcast_block = SQL[SQL.index("create table if not exists broadcasts"):]
+    assert "to anon" not in bcast_block, "broadcasts must not be anon-readable"
+
+
+def test_rain_reports_grants_anon_insert_and_select():
     rain_block = SQL[SQL.index("create table if not exists rain_reports"):
                      SQL.index("create table if not exists subscribers")]
+    assert "to anon" in rain_block
+
+
+def test_subscribers_anon_can_insert_but_never_read_or_touch_telegram():
+    """Onboarding lets a farmer add their own WhatsApp/SMS number, nothing more:
+    no anon select (the phone list must never be readable), and telegram rows only
+    ever come from the bot's own /start discovery, never this policy."""
     subs_block = SQL[SQL.index("create table if not exists subscribers"):
                      SQL.index("create table if not exists broadcasts")]
-    bcast_block = SQL[SQL.index("create table if not exists broadcasts"):]
-
-    assert "to anon" in rain_block
-    assert "to anon" not in subs_block, "subscribers must not be anon-readable"
-    assert "to anon" not in bcast_block, "broadcasts must not be anon-readable"
+    assert "for insert to anon" in subs_block
+    assert "for select to anon" not in subs_block, "the subscriber list must not be anon-readable"
+    assert "'whatsapp', 'sms'" in subs_block, "the anon policy must exclude telegram"
 
 
 def test_env_example_documents_every_key():
@@ -145,6 +169,127 @@ def test_send_py_falls_back_through_the_documented_order(monkeypatch, unconfigur
     monkeypatch.setattr(send.SB, "fetch_subscribers",
                         lambda channel=None: [{"destination": "999"}])
     assert send.resolve_chats(None) == ["999"]
+
+
+def test_env_example_documents_whatsapp_keys():
+    env = (ROOT / ".env.example").read_text()
+    for key in ("WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_ACCESS_TOKEN", "WHATSAPP_TEST_RECIPIENT"):
+        assert f"{key}=" in env, f"{key} not documented in .env.example"
+
+
+def test_all_channels_share_the_same_advisory_text():
+    """Pins the services/advisory_text.py extraction — no drift between three copies."""
+    tg_send = _load("tg_send_pin", ROOT / "services" / "telegram" / "send.py")
+    wa_send = _load("wa_send_pin", ROOT / "services" / "whatsapp" / "send.py")
+    sms_send = _load("sms_send_pin", ROOT / "services" / "sms" / "send.py")
+    assert tg_send.compose is wa_send.compose is sms_send.compose
+
+
+def test_sms_plain_text_strips_markup_telegram_and_whatsapp_rely_on():
+    """SMS has no rich text — a literal *ಮಳೆ* or _text_ on a plain phone reads as broken, not bold."""
+    sms_send = _load("sms_send_markup", ROOT / "services" / "sms" / "send.py")
+    assert sms_send.plain_text("*bold* and _italic_ and normal") == "bold and italic and normal"
+
+
+def test_whatsapp_send_falls_back_through_the_documented_order(monkeypatch, unconfigured):
+    send = _load("wa_send_order", ROOT / "services" / "whatsapp" / "send.py")
+
+    # override wins regardless of everything else
+    assert send.resolve_recipients("explicit") == ["explicit"]
+
+    # empty Supabase (unconfigured) + no env -> nothing
+    monkeypatch.delenv("WHATSAPP_TEST_RECIPIENT", raising=False)
+    assert send.resolve_recipients(None) == []
+
+    # env var used once Supabase has nothing to offer
+    monkeypatch.setenv("WHATSAPP_TEST_RECIPIENT", "919999999999")
+    assert send.resolve_recipients(None) == ["919999999999"]
+
+    # a populated Supabase subscriber list wins over the env var
+    monkeypatch.setattr(send.SB, "fetch_subscribers",
+                        lambda channel=None: [{"destination": "918888888888"}])
+    assert send.resolve_recipients(None) == ["918888888888"]
+
+
+def test_whatsapp_setup_verifies_credentials_and_registers(monkeypatch, unconfigured):
+    """Runs the real main(), with only the network and Supabase calls faked."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import whatsapp_setup as ws  # noqa: PLC0415
+
+    monkeypatch.setattr(ws, "load_env", lambda: ("PHONE_ID", "fake-token"))
+    monkeypatch.setattr(ws, "get", lambda token, path, **p: {
+        "verified_name": "Test Business", "display_phone_number": "+1 555 0100",
+        "quality_rating": "GREEN"})
+
+    registered = []
+    monkeypatch.setattr(ws.SB, "client", lambda: object())  # "configured", no real network
+    monkeypatch.setattr(ws.SB, "add_subscriber", lambda **kw: registered.append(kw) or True)
+    monkeypatch.setattr(sys, "argv", ["whatsapp_setup.py", "--register", "919999999999",
+                                      "--area", "KGIS-H-999999", "--lang", "hi"])
+
+    assert ws.main() == 0
+    assert registered == [{"area_id": "KGIS-H-999999", "channel": "whatsapp",
+                           "destination": "919999999999", "lang": "hi"}]
+
+
+def test_env_example_documents_twilio_keys():
+    env = (ROOT / ".env.example").read_text()
+    for key in ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "TWILIO_TEST_RECIPIENT"):
+        assert f"{key}=" in env, f"{key} not documented in .env.example"
+
+
+def test_sms_send_falls_back_through_the_documented_order(monkeypatch, unconfigured):
+    send = _load("sms_send_order", ROOT / "services" / "sms" / "send.py")
+
+    # override wins regardless of everything else
+    assert send.resolve_recipients("explicit") == ["explicit"]
+
+    # empty Supabase (unconfigured) + no env -> nothing
+    monkeypatch.delenv("TWILIO_TEST_RECIPIENT", raising=False)
+    assert send.resolve_recipients(None) == []
+
+    # env var used once Supabase has nothing to offer
+    monkeypatch.setenv("TWILIO_TEST_RECIPIENT", "+919999999999")
+    assert send.resolve_recipients(None) == ["+919999999999"]
+
+    # a populated Supabase subscriber list wins over the env var
+    monkeypatch.setattr(send.SB, "fetch_subscribers",
+                        lambda channel=None: [{"destination": "+918888888888"}])
+    assert send.resolve_recipients(None) == ["+918888888888"]
+
+
+def test_sms_setup_verifies_credentials_and_registers(monkeypatch, unconfigured):
+    """Runs the real main(), with only the network and Supabase calls faked."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import sms_setup as ss  # noqa: PLC0415
+
+    monkeypatch.setattr(ss, "load_env", lambda: ("SID", "fake-token", "+15550100"))
+    monkeypatch.setattr(ss, "get", lambda sid, token: {
+        "sid": "SID", "friendly_name": "Test Account", "type": "Trial", "status": "active"})
+
+    registered = []
+    monkeypatch.setattr(ss.SB, "client", lambda: object())  # "configured", no real network
+    monkeypatch.setattr(ss.SB, "add_subscriber", lambda **kw: registered.append(kw) or True)
+    monkeypatch.setattr(sys, "argv", ["sms_setup.py", "--register", "+919999999999",
+                                      "--area", "KGIS-H-999999", "--lang", "hi"])
+
+    assert ss.main() == 0
+    assert registered == [{"area_id": "KGIS-H-999999", "channel": "sms",
+                           "destination": "+919999999999", "lang": "hi"}]
+
+
+def test_sms_setup_rejects_bad_credentials(monkeypatch, unconfigured):
+    """Twilio's error shape has no 'sid' key — that's the success/failure discriminator."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import sms_setup as ss  # noqa: PLC0415
+
+    monkeypatch.setattr(ss, "load_env", lambda: ("SID", "bad-token", "+15550100"))
+    monkeypatch.setattr(ss, "get", lambda sid, token: {
+        "status": 401, "message": "Authentication Error - invalid username", "code": 20003})
+    monkeypatch.setattr(sys, "argv", ["sms_setup.py"])
+
+    with pytest.raises(SystemExit, match="credentials rejected"):
+        ss.main()
 
 
 def test_web_supabase_client_degrades_to_null_when_unconfigured():

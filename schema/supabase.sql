@@ -52,7 +52,16 @@ create table if not exists subscribers (
 create index if not exists subscribers_area_channel on subscribers (area_id, channel) where active;
 
 alter table subscribers enable row level security;
--- no policies -> RLS default-denies everyone but service_role, which bypasses RLS entirely
+
+-- Anon may register a farmer's own WhatsApp/SMS number from the onboarding screen —
+-- but never a Telegram row (those only ever come from the bot's own /start discovery,
+-- see scripts/telegram_setup.py) and never read anything back (no select policy below).
+-- The length check is a spam floor, not real validation — real validation is client-side.
+drop policy if exists subscribers_anon_insert on subscribers;
+create policy subscribers_anon_insert on subscribers
+  for insert to anon
+  with check (channel in ('whatsapp', 'sms') and length(destination) between 8 and 20);
+-- no select policy -> anon can add a number but never read the list back
 
 -- --- broadcasts -----------------------------------------------------------------
 

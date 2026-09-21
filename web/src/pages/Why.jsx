@@ -124,8 +124,7 @@ export default function Why() {
               </ol>
               <div className="gloss" style={{ marginTop: 12 }}>
                 Trained on 1991&ndash;2015, tuned on 2016&ndash;2019, scored only on
-                2020&ndash;2024 &mdash; a chronological split, so the numbers above are
-                what the forecast did on seasons that came after everything it was allowed to learn from.
+                2020&ndash;2024 &mdash; a chronological split.
               </div>
             </div>
           </div>

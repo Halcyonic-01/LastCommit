@@ -161,9 +161,47 @@ Get a token from [@BotFather](https://t.me/BotFather), put it in `.env` as
 It prints your chat id — paste that into `.env` as `TELEGRAM_CHAT_ID`. Then
 `services/telegram/send.py` will deliver a real Kannada advisory to your phone.
 
+## 7. WhatsApp (optional)
+
+Create a Meta developer app with the WhatsApp product, add your own number as a
+**verified recipient** in the App Dashboard's API Setup page, then put the phone
+number id and access token in `.env` as `WHATSAPP_PHONE_NUMBER_ID` /
+`WHATSAPP_ACCESS_TOKEN`. Verify it works:
+
+```bash
+.venv/bin/python scripts/whatsapp_setup.py --register <your verified number> --send
+```
+
+`--send` sends Meta's `hello_world` test template, which is always pre-approved —
+useful to confirm delivery before any real advisory template is submitted for
+approval. Once registered, `services/whatsapp/send.py` sends the same Kannada
+advisory `services/telegram/send.py` does, but **only within 24h of that number
+last messaging the bot** — outside that window WhatsApp requires a pre-approved
+template (`--template NAME`), not free text. This is a platform rule, not a bug.
+
+## 8. SMS (optional)
+
+Create a [Twilio](https://www.twilio.com) account (trial is fine), put the Account
+SID, Auth Token, and trial phone number in `.env`, verify a recipient number in the
+Twilio console (Phone Numbers → Manage → Verified Caller IDs on a trial account),
+then:
+
+```bash
+.venv/bin/python scripts/sms_setup.py --register +91XXXXXXXXXX --send
+```
+
+`services/sms/send.py` sends the same advisory text with Telegram/WhatsApp's
+`*bold*`/`_italic_` markers stripped — SMS has no rich text, so left in they'd show
+as literal punctuation. Kannada also forces UCS-2 encoding (67 chars/segment, not
+160), so the full advisory is **~6 billed segments per message** — `--dry-run` prints
+the exact count before you send anything for real.
+
+Twilio numbers need a leading `+` (E.164); WhatsApp's numbers above must NOT have
+one — the two APIs disagree on the format, so don't copy one field into the other.
+
 **Never commit `.env`.** It is gitignored; keep it that way.
 
-## 7. Test
+## 9. Test
 
 ```bash
 .venv/bin/python -m pytest -q
@@ -293,7 +331,7 @@ src/varshadrishti/
 rules/       default.yaml + districts/*.yaml — district plans override by rule id
 schema/      the frozen data contract (JSON Schema 2020-12)
 web/         React + Vite PWA
-services/    telegram sender
+services/    telegram + whatsapp + sms senders, shared advisory_text.py
 tests/       one file per phase, P0 → P4
 ```
 
