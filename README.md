@@ -588,8 +588,14 @@ The speech services are deliberately **not** deployed — see the note at the en
 `vercel.json` in the repo root is the whole configuration:
 
 ```bash
-pip install -r requirements-build.txt && cd web && npm install && npm run build
+python3 -m venv .venv && .venv/bin/pip install --quiet -r requirements-build.txt && cd web && npm install && npm run build
 ```
+
+The venv is not decoration. Vercel's build image is uv-managed, so a bare
+`pip install` there fails with PEP 668 `externally-managed-environment`. A venv sidesteps
+that, and `scripts/prebuild.mjs` already prefers `.venv` over the system interpreter, so
+nothing else needs to know. Set `PYTHON` instead if your host provides an interpreter that
+already has the two packages.
 
 Output is `web/dist`. Two things about that build are worth knowing:
 
