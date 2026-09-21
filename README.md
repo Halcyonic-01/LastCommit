@@ -781,6 +781,64 @@ The repository includes `scripts/derive_blend_weights.py`, `scripts/exp_longlead
 
 This design makes the model suitable for the SIH prototype workflow: the judge can reproduce feature construction, inspect a model bundle, compare the held-out metrics, follow the probability through blending and aggregation, and see the exact rule/source text shown to a farmer.
 
+## References
+
+Every entry below was checked against its publisher page before being written down, and
+each says what this repository actually uses it for. Nothing here is decorative: if the
+code does not depend on it, it is not listed.
+
+### Rainfall and reanalysis data
+
+1. Pai, D. S., Sridhar, L., Rajeevan, M., Sreejith, O. P., Satbhai, N. S., and Mukhopadhyay, B. (2014). Development of a new high spatial resolution (0.25° × 0.25°) long period (1901–2010) daily gridded rainfall data set over India and its comparison with existing data sets over the region. *MAUSAM*, 65(1), 1–18. <https://mausamjournal.imd.gov.in/index.php/MAUSAM/article/view/851>
+   — the primary training truth. Every label and climatology in this project is built from this product (`src/varshadrishti/data/rainfall.py`).
+2. Funk, C., Peterson, P., Landsfeld, M., Pedreros, D., Verdin, J., Shukla, S., Husak, G., Rowland, J., Harrison, L., Hoell, A., and Michaelsen, J. (2015). The climate hazards infrared precipitation with stations — a new environmental record for monitoring extremes. *Scientific Data*, 2, 150066. <https://doi.org/10.1038/sdata.2015.66>
+   — the 0.05° verification layer used to check panchayat-scale detail that a 0.25° grid cannot resolve.
+3. Muñoz-Sabater, J., Dutra, E., Agustí-Panareda, A., et al. (2021). ERA5-Land: a state-of-the-art global reanalysis dataset for land applications. *Earth System Science Data*, 13, 4349–4383. <https://doi.org/10.5194/essd-13-4349-2021>
+   — the documented fallback when IMD Pune is unavailable.
+
+### Ensemble and extended-range forecasting
+
+4. Guan, H., Zhu, Y., Sinsky, E., et al. (2022). GEFSv12 reforecast dataset for supporting subseasonal and hydrometeorological applications. *Monthly Weather Review*, 150(3), 647–665. <https://doi.org/10.1175/MWR-D-21-0245.1>
+   — the reforecast archive the blend weights were measured against. `provenance.nwp.weight_provenance` states on every bulletin that GEFS was used as a proxy for EC46.
+5. Vitart, F., Ardilouze, C., Bonet, A., et al. (2017). The Subseasonal to Seasonal (S2S) Prediction Project Database. *Bulletin of the American Meteorological Society*, 98(1), 163–173. <https://doi.org/10.1175/BAMS-D-16-0017.1>
+   — the framing for the 1–4 week horizon this project forecasts on, and the source family behind the ECMWF S2S reforecast features.
+
+### Monsoon: onset, breaks, and teleconnections
+
+6. Pai, D. S., and Nair, R. M. (2009). Summer monsoon onset over Kerala: New definition and prediction. *Journal of Earth System Science*, 118(2), 123–135. <https://doi.org/10.1007/s12040-009-0020-y>
+   — the official objective onset criteria. This project deliberately does *not* use them: a Kerala-wide declaration cannot answer "has the monsoon reached my hobli", so onset is defined per IMD cell against a local rainfall threshold instead.
+7. Rajeevan, M., Gadgil, S., and Bhate, J. (2010). Active and break spells of the Indian summer monsoon. *Journal of Earth System Science*, 119(3), 229–247. <https://doi.org/10.1007/s12040-010-0019-4>
+   — the meteorological basis for treating monsoon breaks as the event a farmer needs warning about, which is what `p_dry7` and `p_dry14` encode.
+8. Wheeler, M. C., and Hendon, H. H. (2004). An all-season real-time multivariate MJO index: Development of an index for monitoring and prediction. *Monthly Weather Review*, 132(8), 1917–1932. <https://doi.org/10.1175/1520-0493(2004)132%3C1917:AARMMI%3E2.0.CO;2>
+   — the RMM index ingested in `scripts/download_indices.py` and used as a model feature.
+9. Saji, N. H., Goswami, B. N., Vinayachandran, P. N., and Yamagata, T. (1999). A dipole mode in the tropical Indian Ocean. *Nature*, 401, 360–363. <https://doi.org/10.1038/43854>
+   — the IOD/DMI index. Tested as a predictor and **excluded**: `provenance.statistical.excluded_features` lists `dmi` on every bulletin because it did not improve held-out skill here.
+
+### Model and forecast verification
+
+10. Chen, T., and Guestrin, C. (2016). XGBoost: A scalable tree boosting system. *Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining*, 785–794. <https://arxiv.org/abs/1603.02754>
+    — the learner. Its native sparsity-aware missing-value handling is why sparse ECMWF reforecast columns are passed through as missing rather than imputed.
+11. Brier, G. W. (1950). Verification of forecasts expressed in terms of probability. *Monthly Weather Review*, 78(1), 1–3. <https://doi.org/10.1175/1520-0493(1950)078%3C0001:VOFEIT%3E2.0.CO;2>
+    — the Brier score, and by extension the Brier skill score reported per event and lead in `models/metrics.json` and shipped inside every area file.
+12. Murphy, A. H. (1973). A new vector partition of the probability score. *Journal of Applied Meteorology*, 12(4), 595–600. <https://doi.org/10.1175/1520-0450(1973)012%3C0595:ANVPOT%3E2.0.CO;2>
+    — the reliability/resolution/uncertainty decomposition behind the reliability bins the verification screen plots.
+13. Mason, S. J., and Graham, N. E. (2002). Areas beneath the relative operating characteristics (ROC) and relative operating levels (ROL) curves: Statistical significance and interpretation. *Quarterly Journal of the Royal Meteorological Society*, 128(584), 2145–2166. <https://doi.org/10.1256/003590002320603584>
+    — the basis for reporting ROC AUC as a discrimination measure alongside BSS rather than in place of it.
+
+### Speech
+
+14. Gulati, A., Qin, J., Chiu, C.-C., et al. (2020). Conformer: Convolution-augmented transformer for speech recognition. *Interspeech 2020*, 5036–5040. <https://arxiv.org/abs/2005.08100>
+    — the architecture behind the ASR model this project runs locally.
+15. Javed, T., Nawale, J. A., George, E. I., et al. (2024). IndicVoices: Towards building an inclusive multilingual speech dataset for Indian languages. <https://arxiv.org/abs/2403.01926>
+    — the AI4Bharat data and model line that `ai4bharat/indic-conformer-600m-multilingual` comes from, which is what `services/asr/server.py` loads.
+16. Lyth, D., and King, S. (2024). Natural language guidance of high-fidelity text-to-speech with synthetic annotations. <https://arxiv.org/abs/2402.01912>
+    — the method Parler-TTS reproduces; `services/tts/server.py` runs its Indic variant with separate spoken-text and voice-description tokenizers for exactly this reason.
+
+### Agronomic advisory
+
+17. Srinivasarao, Ch., Rao, K. V., Gopinath, K. A., et al. (2020). Agriculture contingency plans for managing weather aberrations and extreme climatic events: Development, implementation and impacts in India. *Advances in Agronomy*, 159, 35–91. <https://doi.org/10.1016/bs.agron.2019.08.002>
+    — the programme that produced the district contingency plans in `data/crida/`. Every advisory this project emits cites a table from one of those documents, which is what keeps a language model out of the decision path.
+
 ## SIH project attribution
 
 VarshaDrishti was created as a Smart India Hackathon (SIH) project and prepared for SIH demonstration and evaluation. The repository combines original project code with third-party libraries, public/partner data sources, pretrained model checkpoints, Open-Meteo and Meta integrations, and ICAR-CRIDA reference documents. Their respective terms and attribution requirements continue to apply.
