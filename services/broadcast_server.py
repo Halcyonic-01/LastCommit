@@ -24,7 +24,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PORT = 8787
+# A container is handed its port and must listen on every interface; a laptop should
+# stay on loopback so the officer's secrets are not exposed to the local network.
+PORT = int(os.environ.get("PORT", "8787"))
+HOST = os.environ.get("BROADCAST_HOST", "127.0.0.1")
 AREA_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")  # also doubles as a path-traversal guard
 
 sys.path.insert(0, str(ROOT / "src"))
@@ -61,6 +64,11 @@ def load_env():
 
 load_env()
 TOKEN = os.environ.get("OFFICER_BROADCAST_TOKEN", "").strip()
+# "*" is fine while this only ever answers a page on the same machine. Once it is
+# deployed, responses carry a farmer's name and their advice, so the browser must be
+# told exactly which site may read them. Comma-separated; empty means same-machine only.
+ALLOWED_ORIGINS = [o.strip() for o in
+                   os.environ.get("BROADCAST_ALLOWED_ORIGINS", "").split(",") if o.strip()]
 
 
 def configured_channels() -> dict:
@@ -105,7 +113,15 @@ def run_broadcast(area_ids: list, event: str, lead: str, channels: list) -> dict
 
 class Handler(BaseHTTPRequestHandler):
     def _cors(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = self.headers.get("Origin", "")
+        if not ALLOWED_ORIGINS:
+            allow = "*"                       # local development, loopback only
+        elif origin in ALLOWED_ORIGINS:
+            allow = origin
+        else:
+            allow = ALLOWED_ORIGINS[0]        # refuse the unknown caller by naming another
+        self.send_header("Access-Control-Allow-Origin", allow)
+        self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Officer-Token")
 
@@ -266,8 +282,11 @@ def main():
     if not TOKEN:
         print("WARNING: OFFICER_BROADCAST_TOKEN is not set in .env — every broadcast request will be "
               "rejected with 401 until it is. See .env.example.")
-    print(f"broadcast server on http://localhost:{PORT}  (configured: {configured_channels()})")
-    ThreadingHTTPServer(("localhost", PORT), Handler).serve_forever()
+    print(f"broadcast server on http://{HOST}:{PORT}  (configured: {configured_channels()})")
+    if HOST not in ("127.0.0.1", "localhost") and not ALLOWED_ORIGINS:
+        print("WARNING: listening beyond loopback with no BROADCAST_ALLOWED_ORIGINS set — "
+              "any site a browser visits could read this server's responses.")
+    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
 
 
 if __name__ == "__main__":

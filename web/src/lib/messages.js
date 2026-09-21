@@ -14,7 +14,7 @@ export function markMessagesSeen(iso) {
 // cannot answer — unconfigured, or schema/supabase.sql not run yet — the officer's own
 // broadcast server on this machine serves the same rows, which keeps the whole
 // officer -> farmer loop demonstrable on one laptop.
-const LOCAL_API = "http://localhost:8787";
+const LOCAL_API = import.meta.env.VITE_BROADCAST_API || "http://localhost:8787";
 let _warned = false;
 
 /** An area's advisories, newest first. Never throws: a farmer sees "no messages". */

@@ -1,9 +1,11 @@
-// The officer tools have no real backend yet (Vercel isn't linked — see
-// IMPLEMENTATION_PLAN.md): they talk to services/broadcast_server.py running on the
-// officer's own machine. Hardcoded, not an env var — a fixed local port by design,
-// not a deployment target. Lives here rather than in a component so the broadcast
-// panel, the dashboard's subscriber counts and the notification console all agree.
-export const BROADCAST_API = "http://localhost:8787";
+// Where services/broadcast_server.py is reachable. Defaults to the officer's own
+// machine, which is the whole trust model in development: the bot tokens and the
+// Supabase service key stay on that machine and the browser holds only a passcode.
+// A deployed site sets VITE_BROADCAST_API to its own HTTPS origin — a page served
+// over HTTPS cannot call a plain-HTTP localhost port, the browser blocks it as
+// mixed content. Lives here so the panel, the dashboard and the console all agree.
+export const BROADCAST_API =
+  import.meta.env.VITE_BROADCAST_API || "http://localhost:8787";
 
 const TOKEN_KEY = "vd.officer.token";
 

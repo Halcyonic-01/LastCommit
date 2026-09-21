@@ -1,0 +1,4 @@
+# Everything the officer boundary (services/broadcast_server.py) needs to run, and
+# nothing else. It is stdlib http.server plus the Supabase client; no model, no geo
+# stack, no pandas. Keeping this separate is what lets it run on a small instance.
+supabase

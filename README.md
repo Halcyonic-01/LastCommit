@@ -571,16 +571,90 @@ Never commit `.env`. Use `.env.example` as the starting point.
 
 ## Deployment
 
-The farmer-facing product is a static build with no server in the request path. `npm run build` produces `web/dist`, the PWA service worker caches the app shell, forecast, geography, and photographs for offline use, and the GitHub Actions nightly workflow regenerates and commits the forecast artifacts at `20:00 UTC` (`01:30 IST`). Any static host or CDN serves it; there is no runtime backend to scale, because the browser reads a versioned JSON contract rather than calling a model.
+The system splits into four pieces with very different hosting needs, and only one of
+them is a server you have to run.
 
-That is a deliberate architecture, not a simplification. Inference runs once per night in CI, so the cost of serving a farmer is the cost of serving a file, and the app keeps working through the network outages its users actually have.
+| Piece | Where it goes | Why |
+|---|---|---|
+| Farmer PWA + forecast JSON | **Vercel**, Netlify or Cloudflare Pages — free tier | Static files. No runtime backend, nothing to scale. |
+| Nightly forecast | **GitHub Actions** (already configured) | Commits the new bulletin; the static host redeploys on push. |
+| Database | **Supabase** (already hosted) | Rain reports, subscribers, farmer messages, logs. |
+| Officer boundary | **Render**, Railway or Fly.io — smallest instance | The one process holding secrets. Needs HTTPS. |
 
-Two operator-side services sit outside that static path and bind to localhost by design:
+The speech services are deliberately **not** deployed — see the note at the end.
 
-- Speech (`services/asr/server.py`, `services/tts/server.py`) runs Indic model weights locally, so farmer audio never leaves the machine.
-- The officer boundary (`services/broadcast_server.py`) holds the bot tokens and the Supabase service key. The browser holds only a shared passcode, and every endpoint carrying farmer data requires it.
+### Frontend
 
-Moving the officer boundary to a hosted deployment is a contained change: `send_one()`, `compose()`, and `services/notify/dispatcher.py` are already free of HTTP-server concerns and are what a serverless function would call. The static site, the nightly job, and the farmer PWA are unaffected by where it runs.
+`vercel.json` in the repo root is the whole configuration:
+
+```bash
+pip install -r requirements-build.txt && cd web && npm install && npm run build
+```
+
+Output is `web/dist`. Two things about that build are worth knowing:
+
+- It needs **Python**, not just Node. `scripts/prebuild.mjs` runs `split_forecast.py`, which
+  validates every area file against the frozen schema before writing it. `forecast/area/` is
+  gitignored on purpose — 1,127 files would make each nightly commit unreadable — so the host
+  regenerates them. `requirements-build.txt` holds the only two packages that step imports;
+  installing the full `requirements.txt` would drag in the geo and ML stack for nothing.
+- The app uses `HashRouter`, so **no SPA rewrite rule is needed**. Routes live under `#/`,
+  which any static host serves correctly with no configuration at all.
+
+Set these in the host's environment, at build time:
+
+```text
+VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY   the browser's Supabase client
+VITE_BROADCAST_API                          https origin of the officer boundary
+VITE_TTS_SERVER_URL, VITE_ASR_SERVER_URL    only if speech is hosted somewhere
+```
+
+`VITE_BROADCAST_API` is the one that silently breaks a deployment if it is missed. It
+defaults to `http://localhost:8787`, and a page served over HTTPS cannot call a plain-HTTP
+localhost port — the browser blocks it as mixed content with no useful error in the UI.
+
+### Officer boundary
+
+`services/broadcast_server.py` is the only process that holds a secret: the Supabase
+service key and any provider token. The browser never receives either — it holds a shared
+passcode, and every endpoint carrying farmer data requires it.
+
+The `Dockerfile` builds it alone — no models, no geo stack, no pandas — so it runs on the
+smallest instance a host offers. Deploy the repo root to Render/Railway/Fly and set:
+
+```text
+SUPABASE_URL, SUPABASE_SERVICE_KEY   server-side only, never in a VITE_ var
+OFFICER_BROADCAST_TOKEN              a long random string; rotate it before going live
+BROADCAST_ALLOWED_ORIGINS            https://your-site.example.com
+BROADCAST_HOST=0.0.0.0               a container must listen on every interface
+```
+
+`BROADCAST_ALLOWED_ORIGINS` is required once this is reachable from the internet. Locally
+the server answers any origin, which is harmless when it only ever talks to a page on the
+same machine. Deployed, its responses carry a farmer's name and their advice, so the
+browser has to be told exactly which site may read them — anything else gets refused.
+
+It is stdlib `http.server`. That is honest about its scale: it serves one officer's
+dashboard, not public traffic. Put it behind the host's TLS terminator and leave it there.
+
+### What is not deployed, and why
+
+The speech services (`services/asr`, `services/tts`) stay on the operator's machine. On CPU,
+Indic Parler-TTS costs roughly **18 seconds per call** — measured on this hardware, near-flat
+with sentence length — which is a GPU-class workload, not a free-tier one. The farmer-facing
+read-aloud does not depend on them: the sentences that matter are pre-rendered into
+`web/public` and served as files, at **single-digit milliseconds** from press to sound.
+
+Host them later on a GPU instance and set `VITE_TTS_SERVER_URL` / `VITE_ASR_SERVER_URL`;
+nothing else changes, because both already read their URL from the environment.
+
+### Before going live
+
+- Rotate `OFFICER_BROADCAST_TOKEN`. The checked-in development value is not a secret.
+- Run `schema/supabase.sql` on the production project. Without `farmer_messages`, sends fall
+  back to a file on the server, which reaches the demo app on that machine and no real phone.
+- Confirm the nightly Action's commit triggers a redeploy on the static host, or the site
+  will keep serving the bulletin that was current at build time.
 
 ## Scaling the architecture to India
 

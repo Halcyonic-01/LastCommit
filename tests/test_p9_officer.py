@@ -99,3 +99,41 @@ def test_why_page_states_the_training_split_only_once():
     'scored after training stopped' — one line was cut, not both facts."""
     assert "everything it was allowed to learn from" not in WHY
     assert "chronological split" in WHY
+
+
+# --- deployment ---------------------------------------------------------------
+
+def test_no_shipped_frontend_code_hardcodes_a_localhost_backend():
+    """A hardcoded localhost URL works on the author's laptop and nowhere else, and it
+    fails as a browser mixed-content block rather than an obvious error."""
+    offenders = []
+    for f in sorted((WEB / "lib").glob("*.js")) + sorted((WEB / "pages").glob("*.jsx")) \
+            + sorted((WEB / "components").glob("*.jsx")):
+        text = f.read_text(encoding="utf-8")
+        for i, line in enumerate(text.splitlines(), 1):
+            if "localhost:" in line and "import.meta.env" not in line:
+                offenders.append(f"{f.name}:{i}")
+    assert not offenders, (
+        "localhost backend without an env-var override: " + ", ".join(offenders))
+
+
+def test_the_officer_server_can_be_told_its_host_port_and_origins():
+    """A container is handed a port and must listen on every interface; a deployed
+    server must also name the site allowed to read a farmer's name back."""
+    src = (ROOT / "services" / "broadcast_server.py").read_text(encoding="utf-8")
+    assert 'os.environ.get("PORT"' in src
+    assert 'os.environ.get("BROADCAST_HOST"' in src
+    assert 'BROADCAST_ALLOWED_ORIGINS' in src
+    assert '"Access-Control-Allow-Origin", "*"' not in src, "CORS must not be a fixed wildcard"
+
+
+def test_the_build_only_needs_the_two_packages_the_split_actually_imports():
+    """The full requirements.txt is the geo/ML stack. A static host must not install it
+    to run a JSON split — requirements-build.txt is what keeps that build small."""
+    lines = [x.strip().lower() for x in
+             (ROOT / "requirements-build.txt").read_text(encoding="utf-8").splitlines()]
+    pkgs = [x for x in lines if x and not x.startswith("#")]   # the comments name them too
+    assert "jsonschema" in pkgs and "referencing" in pkgs
+    for heavy in ("xarray", "geopandas", "xgboost", "torch", "pandas"):
+        assert not any(p.startswith(heavy) for p in pkgs), \
+            f"{heavy} does not belong in the frontend build"

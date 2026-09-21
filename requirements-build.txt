@@ -1,0 +1,11 @@
+# Everything the FRONTEND build needs, and nothing else.
+#
+# web/package.json's build runs scripts/prebuild.mjs -> scripts/split_forecast.py, which
+# imports src/varshadrishti/contract.py to validate each area file against the frozen
+# schema before writing it. forecast/area/ is gitignored on purpose (1,127 files would
+# make every nightly commit unreadable), so the host has to generate them at build time.
+#
+# The full requirements.txt pulls xarray, geopandas, xgboost and the rest — none of which
+# a JSON split touches. Installing that on a static host would add minutes for nothing.
+jsonschema
+referencing
