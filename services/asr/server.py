@@ -284,9 +284,16 @@ class ASRHandler(BaseHTTPRequestHandler):
         })
 
 
+class QuietServer(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        import sys
+        if sys.exc_info()[0] is BrokenPipeError:
+            return
+        super().handle_error(request, client_address)
+
 def main():
     _load_model()
-    server = ThreadingHTTPServer(("localhost", PORT), ASRHandler)
+    server = QuietServer(("localhost", PORT), ASRHandler)
     log.info("ASR server listening on http://localhost:%d", PORT)
     try:
         server.serve_forever()

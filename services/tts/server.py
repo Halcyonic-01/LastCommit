@@ -170,9 +170,16 @@ class TTSHandler(BaseHTTPRequestHandler):
         self._send_wav(wav)
 
 
+class QuietServer(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        import sys
+        if sys.exc_info()[0] is BrokenPipeError:
+            return
+        super().handle_error(request, client_address)
+
 def main():
     _load_pipeline()
-    server = ThreadingHTTPServer(("localhost", PORT), TTSHandler)
+    server = QuietServer(("localhost", PORT), TTSHandler)
     log.info("TTS server listening on http://localhost:%d", PORT)
     try:
         server.serve_forever()
