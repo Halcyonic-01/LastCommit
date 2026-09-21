@@ -1,0 +1,181 @@
+# Davanagere — rainfed maize and cotton, per the district's own CRIDA plan
+# (data/raw/crida/KA_Davanagere.pdf). Maize rules cite the plan's red sandy soil
+# rows, cotton the black soil rows (the engine has no soil-type fact; see report).
+district: Davanagere
+source_doc: ICAR-CRIDA Davanagere district agriculture contingency plan
+rules:
+  # --- 2.1.1 rainfed situation: early season drought (delayed onset), maize ---
+  - id: onsetdelay.2wk
+    crop: maize
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 1", "< 3"]
+    action_kn: ಬದಲಾವಣೆ ಬೇಡ — ಮೆಕ್ಕೆಜೋಳ 45x20 ಸೆಂ.ಮೀ ಅಂತರದಲ್ಲಿ ಬಿತ್ತಿ, ಕಾಲುವೆ ಬೇಸಾಯ ಮಾಡಿ, ಪೂರ್ಣ ಸಸಿ ಸಂಖ್ಯೆ ಕಾಪಾಡಿ
+    action_en: No change yet — sow maize at closer 45x20cm spacing, open conservation furrows, and maintain full plant population
+    reason_kn: ಮುಂಗಾರು ಇನ್ನೂ ಎರಡು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about two weeks late so far
+
+  - id: onsetdelay.4wk
+    crop: maize
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 3", "< 5"]
+    action_kn: ಮೆಕ್ಕೆಜೋಳ + ತೊಗರಿ (BRG-2) ಮಿಶ್ರ ಬೆಳೆಗೆ ಬದಲಾಯಿಸಿ, ಕಿರು ಅವಧಿಯ ದ್ವಿದಳ ಧಾನ್ಯ ಆರಿಸಿ, 60x30 ಸೆಂ.ಮೀ ಅಂತರದಲ್ಲಿ ಬಿತ್ತಿ, ಸಾವಯವ ಗೊಬ್ಬರ ಹಾಕಿ
+    action_en: Switch to maize + redgram (BRG-2) mixed cropping; pick a short-duration pulse, sow maize at 60x30cm spacing, and apply organic manure
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ನಾಲ್ಕು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about four weeks late
+
+  - id: onsetdelay.6wk
+    crop: maize
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 5", "< 7"]
+    action_kn: ಮೆಕ್ಕೆಜೋಳ ಬದಲು ರಾಗಿ (GPU-28), ರಾಗಿ + ಹುರುಳಿ, ಅಥವಾ ಸೂರ್ಯಕಾಂತಿ (KBSH-53) ಬಿತ್ತಿ, ಶೇ.20 ಹೆಚ್ಚು ಬೀಜ ಬಳಸಿ
+    action_en: Switch to finger millet (GPU-28), finger millet + horsegram, or sunflower (KBSH-53) instead of maize; use 20% higher seed rate
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ಆರು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about six weeks late
+
+  - id: onsetdelay.8wk
+    crop: maize
+    stage: pre_sowing
+    severity: critical
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: ">= 7"
+    action_kn: ರಾಗಿ + ಹುರುಳಿ ತಳಿ (GPU-28, GPU-26, GPU-46) ಗೆ ಬದಲಾಯಿಸಿ, ಮಳೆ ಬರುವ 8-10 ದಿನ ಮೊದಲೇ ಒಣ ಬಿತ್ತನೆ ಮಾಡಿ, ಶೇ.15-20 ಹೆಚ್ಚು ಬೀಜ ಬಳಸಿ
+    action_en: Switch to finger millet + horsegram (varieties GPU-28, GPU-26, GPU-46); dry-sow 8-10 days before rain with 15-20% higher seed rate
+    reason_kn: ಮುಂಗಾರು ಎಂಟು ವಾರಕ್ಕಿಂತ ಹೆಚ್ಚು ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is more than eight weeks late
+
+  # --- 2.1.1 early season drought (delayed onset), cotton ---
+  - id: onsetdelay.2wk.cotton
+    crop: cotton
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 1", "< 3"]
+    action_kn: ಹತ್ತಿ + ಬೆಂಡೆ (ಬಲೆ ಬೆಳೆಯಾಗಿ) ಅಥವಾ ಹತ್ತಿ + ಶೇಂಗಾ (1:3) ಬೆಳೆಯಿರಿ, 120x120 ಸೆಂ.ಮೀ ಅಗಲ ಅಂತರ ಇಟ್ಟು ಪ್ರತಿ ಗುಣಿಗೆ 2 ಬೀಜ ಬಿತ್ತಿ, ಗುಣಿಗೆ ವರ್ಮಿಕಾಂಪೋಸ್ಟ್ ಹಾಕಿ
+    action_en: Grow cotton + bhendi as a trap crop, or cotton + groundnut (1:3); use wide 120x120cm spacing, sow 2 seeds per hill, and apply vermicompost to each hill
+    reason_kn: ಮುಂಗಾರು ಇನ್ನೂ ಎರಡು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about two weeks late so far
+
+  - id: onsetdelay.4wk.cotton
+    crop: cotton
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 3", "< 5"]
+    action_kn: ಹತ್ತಿ ಬದಲು ಸೂರ್ಯಕಾಂತಿ, ಮೆಕ್ಕೆಜೋಳ ಅಥವಾ ತೊಗರಿ (ಮಧ್ಯಮ ಅವಧಿಯ ತಳಿ) ಬಿತ್ತಿ; ಬೀಜ UAS ಬೆಂಗಳೂರಿನಿಂದ ಸಿಗುತ್ತದೆ
+    action_en: Switch from cotton to sunflower, maize, or redgram (medium-duration varieties); breeder seed is supplied by UAS Bengaluru
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ನಾಲ್ಕು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about four weeks late
+
+  - id: onsetdelay.6wk.cotton
+    crop: cotton
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 5", "< 7"]
+    action_kn: ಸೂರ್ಯಕಾಂತಿ (KBSH-53 ಅಥವಾ KBSH-44) ಅಥವಾ ಹರಳು (DCS-9) ಗೆ ಬದಲಾಯಿಸಿ; ಸೂರ್ಯಕಾಂತಿಗೆ ಪ್ರತಿ ಗುಣಿಗೆ 2 ಬೀಜ ಇಡಿ, ಹರಳು ಬೀಜವನ್ನು ಬಿತ್ತುವ ಮೊದಲು 6 ಗಂಟೆ ನೀರಿನಲ್ಲಿ ನೆನೆಸಿ
+    action_en: Switch to sunflower (KBSH-53 or KBSH-44) or castor (DCS-9); dibble 2 seeds per hill for sunflower, and soak castor seed in water for 6 hours before sowing
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ಆರು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about six weeks late
+
+  - id: onsetdelay.8wk.cotton
+    crop: cotton
+    stage: pre_sowing
+    severity: critical
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: ">= 7"
+    action_kn: ಹತ್ತಿ ಬದಲು ಹುರುಳಿ (PHG-9) ಅಥವಾ ಅವರೆ (HA-3, HA-4) ಬಿತ್ತಿ; ಹುರುಳಿಗೆ ಹೆಚ್ಚು ಬೀಜ ಬಳಸಿ
+    action_en: Switch from cotton to horsegram (PHG-9) or field bean (HA-3, HA-4); use a higher seed rate for horsegram
+    reason_kn: ಮುಂಗಾರು ಎಂಟು ವಾರಕ್ಕಿಂತ ಹೆಚ್ಚು ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is more than eight weeks late
+
+  # --- 2.1.1 normal onset then a 15-20 day dry spell after sowing, poor germination ---
+  - id: falseonset.poor_germination
+    crop: maize
+    stage: sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_false_onset_w1: ">= 0.30"
+    action_kn: ಸಸಿ ವಿರಳಗೊಳಿಸಿ, ಸಾಧ್ಯವಿದ್ದರೆ ಸ್ಪ್ರಿಂಕ್ಲರ್‌ನಿಂದ ರಕ್ಷಣಾ ನೀರಾವರಿ ಕೊಡಿ, ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಲು ಮತ್ತೆ ಮತ್ತೆ ಅಂತರ ಬೇಸಾಯ ಮಾಡಿ
+    action_en: Thin the stand and give protective sprinkler irrigation if available; keep inter-cultivating to hold soil moisture
+    reason_kn: ಬಿತ್ತನೆ ನಂತರ 15-20 ದಿನ ಮಳೆ ನಿಂತು ಮೊಳಕೆ ವಿಫಲವಾಗುವ ಸಾಧ್ಯತೆ
+    reason_en: Rain may stop 15-20 days after sowing and germination may fail
+
+  - id: falseonset.poor_germination.cotton
+    crop: cotton
+    stage: sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_false_onset_w1: ">= 0.30"
+    action_kn: ಸಸಿ ವಿರಳಗೊಳಿಸಿ, ಖಾಲಿ ಜಾಗ ತುಂಬಿಸಿ, ಸಾಧ್ಯವಿದ್ದರೆ ಸ್ಪ್ರಿಂಕ್ಲರ್‌ನಿಂದ ರಕ್ಷಣಾ ನೀರಾವರಿ ಕೊಡಿ, ಅಂತರ ಬೇಸಾಯ ಮಾಡಿ, ಕಳೆಯಿಂದ ಮಲ್ಚಿಂಗ್ ಮಾಡಿ
+    action_en: Thin and gap-fill the stand; give protective sprinkler irrigation if available, keep inter-cultivating, and mulch with weeds to hold soil moisture
+    reason_kn: ಬಿತ್ತನೆ ನಂತರ 15-20 ದಿನ ಮಳೆ ನಿಂತು ಮೊಳಕೆ ವಿಫಲವಾಗುವ ಸಾಧ್ಯತೆ
+    reason_en: Rain may stop 15-20 days after sowing and germination may fail
+
+  # --- 2.1.1 mid season drought (2 consecutive rainless weeks), vegetative stage ---
+  - id: midseason.vegetative
+    crop: maize
+    stage: vegetative
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಸಾರಜನಕವನ್ನು ಭಾಗ ಮಾಡಿ ಹಾಕಿ, ತೇವ ಹೆಚ್ಚು ಕಾಲ ಉಳಿಸಲು ಸಾವಯವ ಮಲ್ಚಿಂಗ್ ಮಾಡಿ, ಶೇ.25 ಸಸಿ ತೆಗೆದು ಮೇವು/ಮಲ್ಚಿಂಗ್‌ಗೆ ಬಳಸಿ, ಅಂತರ ಬೇಸಾಯ ಮುಂದುವರಿಸಿ
+    action_en: Split-apply nitrogen, mulch with organic matter to hold moisture longer, and thin out a quarter of the crop for fodder/mulch; keep inter-cultivating
+    reason_kn: ಬೆಳವಣಿಗೆ ಹಂತದಲ್ಲಿ ದೀರ್ಘ ಒಣ ಅವಧಿಯ ಸಾಧ್ಯತೆ
+    reason_en: A long dry spell is likely during the growing stage
+
+  - id: midseason.vegetative.cotton
+    crop: cotton
+    stage: vegetative
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಹತ್ತಿ ಮೊಗ್ಗು ಉದುರುವುದನ್ನು ತಡೆಯಲು ಬಿತ್ತಿದ 45 ಮತ್ತು 55 ದಿನಕ್ಕೆ ಪ್ಲಾನೊಫಿಕ್ಸ್ (9 ಲೀಟರ್ ನೀರಿಗೆ 2 ಮಿ.ಲೀ) ಸಿಂಪಡಿಸಿ; ಬ್ಲೇಡ್ ಹ್ಯಾರೋ ಮಾಡಿ, ಏರು-ಕಾಲುವೆ ಮಾಡಿ
+    action_en: Spray Planofix (2ml per 9 litres of water) at 45 and 55 days after sowing to stop squares from shedding; also do blade harrowing and form ridges and furrows
+    reason_kn: ಈ ಹಂತದಲ್ಲಿ ಒಣ ಅವಧಿ ಬಂದರೆ ಹತ್ತಿಯ ಮೊಗ್ಗು ಉದುರುವ ಅಪಾಯ
+    reason_en: A long dry spell during square formation can cause cotton to shed its squares
+
+  # --- 2.1.1 mid season drought, flowering stage (maize only — cotton's own row
+  #     here is the same generic idea as the statewide default, so no override) ---
+  - id: midseason.flowering
+    crop: maize
+    stage: flowering
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಸಾಧ್ಯವಿದ್ದರೆ ರಕ್ಷಣಾ ನೀರಾವರಿ ಕೊಡಿ, ಎಲೆಗಳ ಮೇಲೆ ಶೇ.2 ಯೂರಿಯಾ ಅಥವಾ ಡಿಎಪಿ ಸಿಂಪಡಿಸಿ
+    action_en: Give protective irrigation if available and spray 2% urea or DAP on the leaves
+    reason_kn: ಹೂ ಬಿಡುವ ಹಂತದಲ್ಲಿ ಒಣ ಅವಧಿ ಇಳುವರಿಗೆ ಹೆಚ್ಚು ಅಪಾಯಕಾರಿ
+    reason_en: Flowering stage is the most yield-sensitive time for a dry spell to hit
+
+  # --- 2.2 unusual rains at crop maturity (maize only — cotton's table has no
+  #     maturity-stage entry, it stops at the vegetative-stage row) ---
+  - id: unusualrain.maturity
+    crop: maize
+    stage: maturity
+    severity: warn
+    table: "2.2"
+    when:
+      p_heavy_w1: ">= 0.30"
+    action_kn: ಹೆಚ್ಚಿನ ನೀರು ಬಸಿದು ಹಾಕಿ, ಪೂರ್ಣ ಪಕ್ವವಾದ ಮೇಲೆ ಕೊಯ್ಲು ಮಾಡಿ, ಕೊಯ್ಲು ಮಾಡಿದ ಮೆಕ್ಕೆಜೋಳವನ್ನು ಕೂಡಲೇ ಒಣ ಜಾಗಕ್ಕೆ ಸಾಗಿಸಿ
+    action_en: Drain excess water and harvest at physiological maturity; move the harvested maize to a dry place right away
+    reason_kn: ಕೊಯ್ಲು ಹಂತದಲ್ಲಿ ಭಾರೀ ಮಳೆಯಿಂದ ಬೆಳೆ ನಷ್ಟದ ಅಪಾಯ
+    reason_en: Heavy rain at harvest time risks losing the crop

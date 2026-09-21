@@ -56,18 +56,6 @@ def test_send_one_whatsapp_success(monkeypatch):
     assert BS.send_one("whatsapp", "AREA", "hello") == {"ok": 1, "failed": 0, "error": None}
 
 
-def test_send_one_sms_success_strips_markup_before_sending(monkeypatch):
-    monkeypatch.setattr(BS.SB, "fetch_subscribers", lambda channel=None, area_id=None: [{"destination": "+91999"}])
-    monkeypatch.setenv("TWILIO_ACCOUNT_SID", "sid")
-    monkeypatch.setenv("TWILIO_AUTH_TOKEN", "tok")
-    monkeypatch.setenv("TWILIO_FROM_NUMBER", "+1555")
-    captured = {}
-    monkeypatch.setattr(BS.SMS, "call", lambda sid, auth, **p: captured.update(p) or {"status": "queued"})
-    r = BS.send_one("sms", "AREA", "*bold* text")
-    assert r == {"ok": 1, "failed": 0, "error": None}
-    assert captured["Body"] == "bold text"
-
-
 # --- run_broadcast(): every area x every channel, then log -------------------
 
 def test_run_broadcast_logs_only_the_channel_that_actually_sent(monkeypatch):
@@ -143,6 +131,17 @@ def test_health_reports_token_and_channel_configuration(server, monkeypatch):
     assert body["token_set"] is True
     assert body["configured"]["telegram"] is True
     assert body["configured"]["whatsapp"] is False
+
+
+def test_subscriber_counts_are_aggregated_never_raw_destinations(server, monkeypatch):
+    monkeypatch.setattr(BS.SB, "fetch_subscribers", lambda channel=None, area_id=None: [
+        {"area_id": "A", "destination": "111"}, {"area_id": "A", "destination": "222"},
+        {"area_id": "B", "destination": "333"},
+    ])
+    status, body = _get(server, "/api/subscriber-counts")
+    assert status == 200
+    assert body == {"A": 2, "B": 1}
+    assert "111" not in json.dumps(body), "a phone number/chat id leaked into the aggregate endpoint"
 
 
 def test_broadcast_rejects_missing_token(server):

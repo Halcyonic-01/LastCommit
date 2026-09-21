@@ -172,7 +172,10 @@ def areas_from_geo(pilot_only: bool):
                     district_en=str(row.get("district_en") or ""),
                     centroid=cents[k],
                     n_cells=int(n_cells.get(aid, 1)),
-                    onset_delay_weeks=2.0 + (k % 10) / 10.0,
+                    # Spread across the schema's real [-8,12] range (early/on-time/several
+                    # delay tiers) rather than a narrow always-"2 weeks late" band, so the
+                    # onset-delay rules don't fire on literally every mock area at once.
+                    onset_delay_weeks=-2.0 + (k % 20) * 0.5,
                     onset_status="in_season",
                     confidence="medium" if k % 3 else "low",
                     **pseudo(aid),
@@ -189,7 +192,7 @@ def areas_from_fixture():
     areas = [
         c.Area(
             area_id=aid, name_en=en, name_kn=kn, level=lvl, parent_id=parent,
-            centroid=ctr, n_cells=nc, onset_delay_weeks=2.0 + i / 10,
+            centroid=ctr, n_cells=nc, onset_delay_weeks=-2.0 + (i % 20) * 0.5,
             onset_status="in_season", confidence="medium" if i < 2 else "low",
             **pseudo(aid),
         )

@@ -2,8 +2,11 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getLatest, LEADS, advisoryHorizon } from "../lib/api.js";
 import { karteFor } from "../i18n/strings.js";
+import { supabase } from "../lib/supabase.js";
 import HazardMap, { DRY, WATER } from "../components/HazardMap.jsx";
-import BroadcastPanel from "../components/BroadcastPanel.jsx";
+import BroadcastPanel, { BROADCAST_API } from "../components/BroadcastPanel.jsx";
+
+const REPORT_WINDOW_DAYS = 14;  // ground truth this recent is still worth showing an officer
 
 const HAZARDS = [
   { key: "p_dry7",        label: "Dry spell 7d",  ramp: DRY,   note: "7 consecutive days under 2.5 mm" },
@@ -21,10 +24,32 @@ export default function Officer() {
   const [err, setErr] = useState(null);
   const [queued, setQueued] = useState([]);
   const [reviewing, setReviewing] = useState(false);
+  const [reports, setReports] = useState([]);
+  const [subCounts, setSubCounts] = useState({});
 
   const H = HAZARDS.find((h) => h.key === hazard);
 
   useEffect(() => { getLatest().then(setLatest).catch((e) => setErr(e.message)); }, []);
+
+  // Best-effort: the broadcast server is a local, optional tool (see BroadcastPanel),
+  // so a farmer count here is a bonus when it's running, never a hard requirement.
+  useEffect(() => {
+    fetch(`${BROADCAST_API}/api/subscriber-counts`).then((r) => r.json()).then(setSubCounts).catch(() => {});
+  }, []);
+
+  // Real ground truth, not a hazard prediction — plotted once latest.areas exists so
+  // each report's area_id can resolve to a real centroid instead of guessing a location.
+  useEffect(() => {
+    if (!supabase || !latest) return;
+    const since = new Date(Date.now() - REPORT_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+    supabase.from("rain_reports").select("area_id, level, observed_on")
+      .gte("observed_on", since).then(({ data, error }) => {
+        if (error || !data) return;
+        setReports(data
+          .map((r) => ({ ...r, centroid: latest.areas[r.area_id]?.centroid }))
+          .filter((r) => r.centroid));
+      });
+  }, [latest]);
 
   const values = {};
   if (latest) {
@@ -102,7 +127,8 @@ export default function Officer() {
 
       <div className="ops-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr)", gap: 0 }}>
         <div style={{ position: "relative", borderRight: "1px solid var(--rule)" }}>
-          <HazardMap values={values} ramp={H.ramp} onHover={setHover} />
+          <HazardMap values={values} ramp={H.ramp} onHover={setHover}
+            points={reports.map((r) => ({ lon: r.centroid[0], lat: r.centroid[1], level: r.level }))} />
           <div style={{ position: "absolute", left: 16, bottom: 16, background: "rgba(20,23,26,.9)",
             border: "1px solid var(--rule2)", padding: "9px 11px" }}>
             <div className="ops-mono" style={{ fontSize: 10, color: "var(--ink3)", letterSpacing: ".1em" }}>{H.label.toUpperCase()}</div>
@@ -113,6 +139,12 @@ export default function Officer() {
               <span>0</span><span>10/10</span>
             </div>
             <div className="ops-mono" style={{ fontSize: 9.5, color: "var(--ink3)", marginTop: 5, maxWidth: 150 }}>{H.note}</div>
+            {reports.length ? (
+              <div className="ops-mono" style={{ fontSize: 9.5, color: "var(--ink3)", marginTop: 7, paddingTop: 6, borderTop: "1px solid var(--rule2)" }}>
+                <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: 4, background: "#2f79ad", marginRight: 5 }} />
+                {reports.length} FARMER RAIN REPORT{reports.length === 1 ? "" : "S"} · {REPORT_WINDOW_DAYS}D
+              </div>
+            ) : null}
           </div>
           {hover ? (
             <div style={{ position: "absolute", right: 16, top: 16, background: "rgba(20,23,26,.94)", border: "1px solid var(--rule2)", padding: "9px 12px" }}>
@@ -133,7 +165,7 @@ export default function Officer() {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr>
-                  {["", "TALUK", "DISTRICT", "RISK", "", "CELLS"].map((h, i) => (
+                  {["", "TALUK", "DISTRICT", "RISK", "", "CELLS", "SUBS"].map((h, i) => (
                     <th key={i} className="ops-mono" style={{ textAlign: i >= 4 ? "right" : "left", padding: "7px 10px",
                       fontSize: 9.5, letterSpacing: ".1em", color: "var(--ink3)", borderBottom: "1px solid var(--rule2)", fontWeight: 400 }}>{h}</th>
                   ))}
@@ -163,6 +195,9 @@ export default function Officer() {
                         {Math.round(p * 100)}%
                       </td>
                       <td className="ops-mono" style={{ padding: "6px 10px", borderBottom: "1px solid var(--rule)", textAlign: "right", color: "var(--ink3)", fontSize: 11 }}>{a.n_cells}</td>
+                      <td className="ops-mono" style={{ padding: "6px 10px", borderBottom: "1px solid var(--rule)", textAlign: "right", color: subCounts[a.area_id] ? "var(--ink2)" : "var(--ink3)", fontSize: 11 }}>
+                        {subCounts[a.area_id] ?? "—"}
+                      </td>
                     </tr>
                   );
                 })}

@@ -1,0 +1,8 @@
+# Indic Parler-TTS dependencies
+# Install with: pip install -r services/tts/requirements.txt
+parler-tts>=0.2.0
+transformers>=4.40.0
+torch>=2.1.0
+soundfile>=0.12.1
+# For the local server
+# (no extra deps — uses stdlib http.server)

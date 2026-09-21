@@ -1,0 +1,289 @@
+# Yavatmal (Vidarbha, Maharashtra) — rainfed cotton, soybean and pigeon pea (tur), per
+# the district's own CRIDA plan (data/raw/crida/MH_Yavatmal_Vidarbha.pdf). Sowing window
+# (1.12, kharif-rainfed): Cotton & Soybean 20 June-15 July, Pigeonpea 1st week of July —
+# about 3 weeks after crop_stage()'s 1 June anchor, so stage tagging runs early here.
+# Section numbers match Karnataka's template exactly: 2.1.1 rainfed drought, 2.2 unusual rains.
+# action_kn/reason_kn hold Hindi text below, not Kannada — Maharashtra's regional language,
+# field name kept as-is since engine.py just reads the string without validating script.
+district: Yavatmal
+source_doc: ICAR-CRIDA Yavatmal district agriculture contingency plan
+rules:
+  # --- 2.1.1 rainfed situation: early season drought (delayed onset), by crop ---
+  - id: onsetdelay.2wk
+    crop: cotton
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 1", "< 3"]
+    action_kn: अभी कोई बदलाव नहीं — कपास की सामान्य खेती पद्धति अपनाएं
+    action_en: No change yet — follow the normal package of practices for cotton
+    reason_kn: मानसून अभी लगभग दो हफ्ते देर से आया है
+    reason_en: Monsoon onset is about two weeks late so far
+
+  - id: onsetdelay.4wk
+    crop: cotton
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 3", "< 5"]
+    action_kn: कपास की जगह सोयाबीन (JS-335, JS-93-05) या तुअर (AKT-8811, विपुला, PKV तारा, BSMR-736) बोएं
+    action_en: Switch to soybean (JS-335, JS-93-05) or pigeon pea (AKT-8811, Vipula, PKV Tara, BSMR-736) instead of cotton
+    reason_kn: मानसून लगभग चार हफ्ते देर से आया है
+    reason_en: Monsoon onset is about four weeks late
+
+  - id: onsetdelay.6wk
+    crop: cotton
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 5", "< 7"]
+    action_kn: अकेले तुअर (AKT-8811, विपुला, PKV तारा, BSMR-736) या सूरजमुखी/तिल/अरंडी/बाजरा बोएं; तुअर के लिए 60x30 सेमी की कम दूरी रखें और मिट्टी की नमी बचाएं
+    action_en: Switch to sole pigeon pea (AKT-8811, Vipula, PKV Tara, BSMR-736) or sunflower/sesame/castor/pearl millet; use closer 60x30 cm spacing for pigeon pea and conserve soil moisture
+    reason_kn: मानसून लगभग छह हफ्ते देर से आया है
+    reason_en: Monsoon onset is about six weeks late
+
+  - id: onsetdelay.8wk
+    crop: cotton
+    stage: pre_sowing
+    severity: critical
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: ">= 7"
+    action_kn: अकेले तुअर (AKT-8811, विपुला) या सूरजमुखी/तिल/अरंडी/बाजरा बोएं, तुअर के लिए 60x30 सेमी की कम दूरी रखें
+    action_en: Switch to sole pigeon pea (AKT-8811, Vipula) or sunflower/sesame/castor/pearl millet, with closer 60x30 cm spacing for pigeon pea
+    reason_kn: मानसून सात हफ्ते से ज्यादा देर से आया है
+    reason_en: Monsoon onset is more than seven weeks late
+
+  - id: onsetdelay.2wk.soybean
+    crop: soybean
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 1", "< 5"]
+    action_kn: कोई बदलाव नहीं — सोयाबीन की सामान्य खेती जारी रखें
+    action_en: No change — continue soybean as planned, follow the normal package of practices
+    reason_kn: मानसून एक से चार हफ्ते देर से आया है
+    reason_en: Monsoon onset is one to four weeks late so far
+
+  - id: onsetdelay.6wk.soybean
+    crop: soybean
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 5", "< 7"]
+    action_kn: सोयाबीन की जगह अकेले तुअर, सूरजमुखी, तिल, अरंडी या बाजरा बोएं
+    action_en: Switch to sole pigeon pea, sunflower, sesame, castor, or pearl millet instead of soybean
+    reason_kn: मानसून लगभग पांच से छह हफ्ते देर से आया है
+    reason_en: Monsoon onset is about five to six weeks late
+
+  - id: onsetdelay.8wk.soybean
+    crop: soybean
+    stage: pre_sowing
+    severity: critical
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: ">= 7"
+    action_kn: सोयाबीन की जगह अकेले तुअर (AKT-8811, विपुला) या सूरजमुखी/तिल/अरंडी/बाजरा बोएं
+    action_en: Switch to sole pigeon pea (AKT-8811, Vipula) or sunflower/sesame/castor/pearl millet instead of soybean
+    reason_kn: मानसून सात हफ्ते से ज्यादा देर से आया है
+    reason_en: Monsoon onset is more than seven weeks late
+
+  - id: onsetdelay.2wk.pigeonpea
+    crop: pigeonpea
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 1", "< 3"]
+    action_kn: कोई बदलाव नहीं — तुअर की सामान्य खेती जारी रखें
+    action_en: No change — continue pigeon pea as planned
+    reason_kn: मानसून अभी लगभग दो हफ्ते देर से आया है
+    reason_en: Monsoon onset is about two weeks late so far
+
+  - id: onsetdelay.4wk.pigeonpea
+    crop: pigeonpea
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 3", "< 5"]
+    action_kn: तुअर की किस्म AKT-8811, विपुला, PKV तारा या BSMR-736 बोएं; 90x30 सेमी की जगह 90x20 सेमी दूरी रखें
+    action_en: Switch to pigeon pea variety AKT-8811, Vipula, PKV Tara, or BSMR-736; use 90x20 cm spacing instead of 90x30 cm
+    reason_kn: मानसून लगभग चार हफ्ते देर से आया है
+    reason_en: Monsoon onset is about four weeks late
+
+  - id: onsetdelay.6wk.pigeonpea
+    crop: pigeonpea
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 5", "< 7"]
+    action_kn: तुअर की किस्म AKT-8811, विपुला, PKV तारा या BSMR-736 का प्रयोग करें, 60x30 सेमी की कम दूरी रखें और मिट्टी की नमी बचाने के उपाय करें
+    action_en: Use pigeon pea variety AKT-8811, Vipula, PKV Tara, or BSMR-736 with closer 60x30 cm spacing; follow in-situ moisture conservation
+    reason_kn: मानसून लगभग छह हफ्ते देर से आया है
+    reason_en: Monsoon onset is about six weeks late
+
+  - id: onsetdelay.8wk.pigeonpea
+    crop: pigeonpea
+    stage: pre_sowing
+    severity: critical
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: ">= 7"
+    action_kn: सबसे कम अवधि की तुअर किस्म — PKV तारा या BSMR-736 — 60x30 सेमी की कम दूरी पर बोएं
+    action_en: Use the shortest-duration pigeon pea variety available — PKV Tara or BSMR-736 — with closer 60x30 cm spacing
+    reason_kn: मानसून सात हफ्ते से ज्यादा देर से आया है
+    reason_en: Monsoon onset is more than seven weeks late
+
+  # --- normal onset, then 15-20 days dry spell after sowing: poor germination ---
+  - id: falseonset.poor_germination
+    crop: cotton
+    stage: sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_false_onset_w1: ">= 0.30"
+    action_kn: निराई-गुड़ाई करें ताकि मिट्टी की नमी बनी रहे, संभव हो तो सुरक्षात्मक सिंचाई दें, और जब तक मिट्टी में नमी न हो तब तक खाद न डालें
+    action_en: Weed and hoe to conserve soil moisture, give protective irrigation if available, and hold off on fertilizer until the soil is moist again
+    reason_kn: बुवाई के बाद बारिश रुक सकती है और अंकुरण खराब हो सकता है
+    reason_en: Rain may stop after sowing and germination may fail
+
+  - id: falseonset.poor_germination.soybean
+    crop: soybean
+    stage: sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_false_onset_w1: ">= 0.30"
+    action_kn: खाली जगह में मक्का या तिल बोकर भरें; अंकुरण आधे से कम हो तो दोबारा बुवाई करें; संभव हो तो सुरक्षात्मक सिंचाई दें
+    action_en: Gap-fill with maize or sesame; resow if germination is below half; give protective irrigation if available
+    reason_kn: बुवाई के बाद बारिश रुक सकती है और अंकुरण खराब हो सकता है
+    reason_en: Rain may stop after sowing and germination may fail
+
+  - id: falseonset.poor_germination.pigeonpea
+    crop: pigeonpea
+    stage: sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_false_onset_w1: ">= 0.30"
+    action_kn: खाली जगह में तिल या मक्का बोकर भरें और संभव हो तो सुरक्षात्मक सिंचाई दें
+    action_en: Gap-fill with sesame or maize and give protective irrigation if available
+    reason_kn: बुवाई के बाद बारिश रुक सकती है और अंकुरण खराब हो सकता है
+    reason_en: Rain may stop after sowing and germination may fail
+
+  # --- mid-season drought (2+ consecutive rainless weeks), vegetative/flowering split ---
+  - id: midseason.vegetative
+    crop: cotton
+    stage: vegetative
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: संभव हो तो सुरक्षात्मक सिंचाई दें और 2% यूरिया या DAP का छिड़काव करें
+    action_en: Give protective irrigation if available and spray 2% urea or DAP
+    reason_kn: बढ़वार की अवस्था में लंबे सूखे की आशंका है
+    reason_en: A long dry spell is likely during the growing stage
+
+  - id: midseason.vegetative.soybean
+    crop: soybean
+    stage: vegetative
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: निराई-गुड़ाई कर नमी बचाएं, संभव हो तो सुरक्षात्मक सिंचाई दें, एक-एक कतार छोड़कर नाली बनाएं, और 2% यूरिया या DAP का छिड़काव करें
+    action_en: Weed and hoe to conserve moisture, give protective irrigation if available, open alternate furrows, and spray 2% urea or DAP
+    reason_kn: बढ़वार की अवस्था में लंबे सूखे की आशंका है
+    reason_en: A long dry spell is likely during the growing stage
+
+  - id: midseason.vegetative.pigeonpea
+    crop: pigeonpea
+    stage: vegetative
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: निराई-गुड़ाई कर नमी बचाएं, संभव हो तो सुरक्षात्मक सिंचाई दें, और एक-एक कतार छोड़कर नाली बनाएं
+    action_en: Weed and hoe to conserve moisture, give protective irrigation if available, and open alternate furrows
+    reason_kn: बढ़वार की अवस्था में लंबे सूखे की आशंका है
+    reason_en: A long dry spell is likely during the growing stage
+
+  - id: midseason.flowering
+    crop: cotton
+    stage: flowering
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: संभव हो तो जीवन रक्षक सिंचाई दें, नहीं तो जितनी उपज तैयार है उसे शारीरिक परिपक्वता पर काट लें
+    action_en: Give life-saving irrigation if available, or harvest at physiological maturity to salvage some yield
+    reason_kn: फूल आने की अवस्था में सूखा पड़ने से उपज को सबसे ज्यादा नुकसान होता है
+    reason_en: Flowering stage is the most yield-sensitive time for a dry spell to hit
+
+  - id: midseason.flowering.soybean
+    crop: soybean
+    stage: flowering
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: संभव हो तो सुरक्षात्मक सिंचाई दें और 2% यूरिया या DAP का छिड़काव करें
+    action_en: Give protective irrigation if available and spray 2% urea or DAP
+    reason_kn: फूल आने की अवस्था में सूखा पड़ने से उपज को सबसे ज्यादा नुकसान होता है
+    reason_en: Flowering stage is the most yield-sensitive time for a dry spell to hit
+
+  - id: midseason.flowering.pigeonpea
+    crop: pigeonpea
+    stage: flowering
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: संभव हो तो सुरक्षात्मक सिंचाई दें और 2% यूरिया या DAP का छिड़काव करें
+    action_en: Give protective irrigation if available and spray 2% urea or DAP
+    reason_kn: फूल आने की अवस्था में सूखा पड़ने से उपज को सबसे ज्यादा नुकसान होता है
+    reason_en: Flowering stage is the most yield-sensitive time for a dry spell to hit
+
+  # --- 2.2 unusual rains: crop maturity/harvest stage, by crop ---
+  - id: unusualrain.maturity
+    crop: cotton
+    stage: maturity
+    severity: warn
+    table: "2.2"
+    when:
+      p_heavy_w1: ">= 0.30"
+    action_kn: खेत से पानी निकालने के लिए नालियां खोलें; भूरे फफूंद रोग पर नजर रखें और 25 ग्राम प्रति 10 लीटर पानी में सल्फर का छिड़काव करें
+    action_en: Open field drainage channels to clear standing water; watch for grey mildew and spray sulphur at 25g/10 litre
+    reason_kn: पकने की अवस्था में भारी बारिश से जलभराव और रोग का खतरा रहता है
+    reason_en: Heavy rain at crop maturity risks waterlogging and disease
+
+  - id: unusualrain.maturity.soybean
+    crop: soybean
+    stage: maturity
+    severity: warn
+    table: "2.2"
+    when:
+      p_heavy_w1: ">= 0.30"
+    action_kn: बारिश रुकते ही कटी हुई सोयाबीन को सुखाने के लिए सुरक्षित जगह पर ले जाएं
+    action_en: Once rain stops, shift harvested soybean to a safer place to dry
+    reason_kn: कटाई के समय भारी बारिश से फसल के नुकसान का खतरा है
+    reason_en: Heavy rain at harvest time risks losing the crop
+
+  - id: unusualrain.maturity.pigeonpea
+    crop: pigeonpea
+    stage: maturity
+    severity: warn
+    table: "2.2"
+    when:
+      p_heavy_w1: ">= 0.30"
+    action_kn: बारिश रुकते ही कटी हुई तुअर को सुखाने के लिए सुरक्षित जगह पर ले जाएं
+    action_en: Once rain stops, shift harvested pigeon pea to a safer place to dry
+    reason_kn: कटाई के समय भारी बारिश से फसल के नुकसान का खतरा है
+    reason_en: Heavy rain at harvest time risks losing the crop

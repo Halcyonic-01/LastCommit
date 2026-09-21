@@ -1,12 +1,17 @@
 # Statewide fallback rules. A district file overrides any rule with the same id.
 # Every rule cites a real CRIDA table — no citation, no advisory.
+#
+# Table numbers below (2.1.1 rainfed drought, 2.2 unusual rains) are ICAR-CRIDA's own
+# standard contingency-plan section numbers, confirmed against the real district PDFs
+# in data/raw/crida/ (checked directly: Tumakuru's plan uses this exact numbering) —
+# not assumed to hold everywhere, but the template is standardized nationwide.
 source_doc: ICAR-CRIDA district agriculture contingency plan
 rules:
   - id: dryspell.presowing.delay
     crop: any
     stage: pre_sowing
     severity: warn
-    table: "2.1"
+    table: "2.1.1"
     when:
       p_dry7_w1: [">= 0.30", "< 0.45"]
     action_kn: ಬಿತ್ತನೆ ಒಂದು ವಾರ ಮುಂದೂಡಿ
@@ -26,17 +31,142 @@ rules:
     reason_kn: ದೀರ್ಘ ಒಣ ಅವಧಿಯ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು
     reason_en: A long dry spell is likely
 
+  # --- onset already delayed (2.1.1's own "early season drought" table, keyed on the
+  #     realised delay rather than a forward dry-spell forecast — a different decision:
+  #     "given onset is already this late, what do I plant now", not "should I wait".
+  - id: onsetdelay.2wk
+    crop: any
+    stage: pre_sowing
+    severity: watch
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 1", "< 3"]
+    action_kn: ಇನ್ನೂ ಎರಡು ವಾರ ಕಾಯಬಹುದು — ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಲು ಸಾಲು ಬೇಸಾಯ ಮಾಡಿ
+    action_en: Still within the normal window — follow moisture-conservation tillage while you wait
+    reason_kn: ಮುಂಗಾರು ಇನ್ನೂ ಎರಡು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about two weeks late so far
+
+  - id: onsetdelay.4wk
+    crop: any
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 3", "< 5"]
+    action_kn: ಕಡಿಮೆ ಅವಧಿಯ ತಳಿಗೆ ಬದಲಾಯಿಸಿ, ಮಳೆ ಬರುವ 8-10 ದಿನ ಮೊದಲೇ ಒಣ ಬಿತ್ತನೆ ಮಾಡಿ
+    action_en: Switch to a shorter-duration variety; dry-sow 8-10 days before rain is expected
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ನಾಲ್ಕು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about four weeks late
+
+  - id: onsetdelay.6wk
+    crop: any
+    stage: pre_sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: [">= 5", "< 7"]
+    action_kn: ಲಭ್ಯವಿರುವ ಅತಿ ಕಡಿಮೆ ಅವಧಿಯ ತಳಿ ಬಳಸಿ
+    action_en: Use the shortest-duration variety available for this crop
+    reason_kn: ಮುಂಗಾರು ಸುಮಾರು ಆರು ವಾರ ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is about six weeks late
+
+  - id: onsetdelay.8wk
+    crop: any
+    stage: pre_sowing
+    severity: critical
+    table: "2.1.1"
+    when:
+      onset_delay_weeks: ">= 7"
+    action_kn: ಈ ಬೆಳೆ ಬದಲು ಹುರುಳಿ ಅಥವಾ ನವಣೆಯಂತಹ ಕಿರು-ಅವಧಿ ಬೆಳೆಗೆ ಬದಲಾಯಿಸಿ
+    action_en: Switch to a short-duration alternate crop such as horse gram or foxtail millet
+    reason_kn: ಮುಂಗಾರು ಎಂಟು ವಾರಕ್ಕಿಂತ ಹೆಚ್ಚು ತಡವಾಗಿದೆ
+    reason_en: Monsoon onset is more than eight weeks late
+
+  # --- sowing rain came, then it stopped (this project's own false-onset label)
+  - id: falseonset.poor_germination
+    crop: any
+    stage: sowing
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_false_onset_w1: ">= 0.30"
+    action_kn: ಮೊಳಕೆ ಪರಿಶೀಲಿಸಿ — ಖಾಲಿ ಜಾಗದಲ್ಲಿ ಮತ್ತೆ ಬಿತ್ತನೆ ಮಾಡಿ
+    action_en: Check germination — gap-fill or resow thin patches
+    reason_kn: ಬಿತ್ತನೆ ನಂತರ ಮಳೆ ನಿಂತು ಮೊಳಕೆ ವಿಫಲವಾಗುವ ಸಾಧ್ಯತೆ
+    reason_en: Rain may stop after sowing and germination may fail
+
+  # --- mid-season dry spell, 2.1.1's own vegetative/flowering split
+  - id: midseason.vegetative
+    crop: any
+    stage: vegetative
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಸಸಿಗಳನ್ನು ವಿರಳಗೊಳಿಸಿ, ಗೊಬ್ಬರ ಹಾಕುವುದನ್ನು ಮುಂದೂಡಿ, ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಿ
+    action_en: Thin the stand, delay top dressing, conserve remaining soil moisture
+    reason_kn: ಬೆಳವಣಿಗೆ ಹಂತದಲ್ಲಿ ದೀರ್ಘ ಒಣ ಅವಧಿಯ ಸಾಧ್ಯತೆ
+    reason_en: A long dry spell is likely during the growing stage
+
+  - id: midseason.flowering
+    crop: any
+    stage: flowering
+    severity: critical
+    table: "2.1.1"
+    when:
+      p_dry14_w1: ">= 0.30"
+    action_kn: ಸಾಧ್ಯವಿದ್ದರೆ ರಕ್ಷಣಾ ನೀರಾವರಿ ಕೊಡಿ, ಕಳೆ ತೆಗೆದು ತೇವ ಸ್ಪರ್ಧೆ ಕಡಿಮೆ ಮಾಡಿ
+    action_en: Give life-saving irrigation if available; weed to reduce moisture competition
+    reason_kn: ಹೂ ಬಿಡುವ ಹಂತದಲ್ಲಿ ಒಣ ಅವಧಿ — ಇಳುವರಿಗೆ ಹೆಚ್ಚು ಅಪಾಯಕಾರಿ
+    reason_en: Flowering stage is the most yield-sensitive time for a dry spell to hit
+
+  # --- unusual/heavy rain, table 2.2 in every CRIDA plan checked so far (this rule
+  #     used to cite 2.4, which is the livestock section — fixed). 2.2's own table
+  #     gives identical "drain the water" advice at vegetative and flowering, so one
+  #     any-stage rule covers both faithfully; maturity gets a genuinely different
+  #     call (harvest now vs. wait) and so gets its own rule instead.
   - id: heavyrain.drainage
     crop: any
     stage: any
     severity: watch
-    table: "2.4"
+    table: "2.2"
     when:
       p_heavy_w1: ">= 0.30"
     action_kn: ಹೊಲದಲ್ಲಿ ನೀರು ಹೋಗಲು ಕಾಲುವೆ ಮಾಡಿ
     action_en: Open drainage channels in the field
     reason_kn: ಭಾರೀ ಮಳೆಯ ಸಾಧ್ಯತೆ
     reason_en: Heavy rain is likely
+
+  - id: unusualrain.maturity
+    crop: any
+    stage: maturity
+    severity: warn
+    table: "2.2"
+    when:
+      p_heavy_w1: ">= 0.30"
+    action_kn: ಬೆಳೆ ಸಿದ್ಧವಿದ್ದರೆ ಕೂಡಲೇ ಕೊಯ್ಲು ಮಾಡಿ, ಇಲ್ಲದಿದ್ದರೆ ನೀರು ಇಳಿಯುವವರೆಗೆ ಕಾಯಿರಿ
+    action_en: Harvest immediately if the crop is ready; otherwise wait until water recedes
+    reason_kn: ಕೊಯ್ಲು ಹಂತದಲ್ಲಿ ಭಾರೀ ಮಳೆಯಿಂದ ಬೆಳೆ ನಷ್ಟದ ಅಪಾಯ
+    reason_en: Heavy rain at harvest time risks losing the crop
+
+  # --- a real, live-data gap this closes: the pre_sowing dry-spell rules above only
+  #     ever matched while stage was hardcoded to pre_sowing everywhere. Once
+  #     crop_stage() started reporting the real stage, any area past sowing with an
+  #     elevated 7-day (not 14-day) dry-spell risk matched nothing at all — found by
+  #     running the real forecast, not by inspection: 801 of 1127 areas lost their
+  #     advisory the day stage started varying for real. Same threshold and table as
+  #     the pre_sowing tiers (2.1.1's drought section), generalised past sowing.
+  - id: dryspell.postsowing
+    crop: any
+    stage: [sowing, vegetative, flowering, maturity]
+    severity: warn
+    table: "2.1.1"
+    when:
+      p_dry7_w1: ">= 0.30"
+    action_kn: ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಿ, ಈ ವಾರ ಮಳೆಯ ಅಗತ್ಯವಿರುವ ಕೆಲಸ ಮುಂದೂಡಿ
+    action_en: Conserve soil moisture; delay any farm work that depends on rain this week
+    reason_kn: ಈ ವಾರ ಒಣ ಅವಧಿಯ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು
+    reason_en: A dry week is likely
 
   - id: normal.continue
     crop: any
