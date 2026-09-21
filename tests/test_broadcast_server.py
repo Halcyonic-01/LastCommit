@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / "services"))
 import broadcast_server as BS  # noqa: E402
 
 REAL_AREA = "KGIS-T-0101"  # Chikkodi block — confirmed present in forecast/area/
+FAKE_TOKEN = "fake-broadcast-token"  # not a real secret — matches services/telegram's own "fake-token" convention
 
 
 # --- send_one(): one channel, one area ---------------------------------------
@@ -102,7 +103,7 @@ def test_run_broadcast_rejects_a_path_traversal_area_id():
 
 @pytest.fixture
 def server(monkeypatch):
-    monkeypatch.setattr(BS, "TOKEN", "test-token-123")
+    monkeypatch.setattr(BS, "TOKEN", FAKE_TOKEN)
     monkeypatch.setattr(BS.SB, "fetch_subscribers", lambda channel=None, area_id=None: [])
     monkeypatch.setattr(BS.SB, "log_broadcast", lambda **kw: True)
     httpd = ThreadingHTTPServer(("localhost", 0), BS.Handler)
@@ -157,7 +158,7 @@ def test_broadcast_rejects_wrong_token(server):
 
 
 def test_broadcast_rejects_incomplete_request(server):
-    status, body = _post(server, "/api/broadcast", {"token": "test-token-123", "areaIds": []})
+    status, body = _post(server, "/api/broadcast", {"token": FAKE_TOKEN, "areaIds": []})
     assert status == 400
 
 
@@ -170,7 +171,7 @@ def test_broadcast_rejects_malformed_json(server):
 
 def test_broadcast_succeeds_with_the_right_token(server):
     status, body = _post(server, "/api/broadcast",
-                         {"token": "test-token-123", "areaIds": [REAL_AREA], "event": "p_dry7", "lead": "w1",
+                         {"token": FAKE_TOKEN, "areaIds": [REAL_AREA], "event": "p_dry7", "lead": "w1",
                           "channels": ["telegram"]})
     assert status == 200
     assert body["sent"] == 0 and body["failed"] == 0  # fixture stubs zero subscribers — no crash either way
