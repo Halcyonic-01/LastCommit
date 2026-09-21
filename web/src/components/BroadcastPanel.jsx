@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 export const BROADCAST_API = "http://localhost:8787";
 const TOKEN_KEY = "vd.officer.token";
 
-const CHANNEL_LABEL = { telegram: "Telegram", whatsapp: "WhatsApp", sms: "SMS" };
+const CHANNEL_LABEL = { telegram: "Telegram", whatsapp: "WhatsApp" };
 
 /** Broadcast review: real preview text, a real recipient send, never a one-tap fire. */
 export default function BroadcastPanel({ areaIds, areaNames, event, lead, onClose, onSent }) {
