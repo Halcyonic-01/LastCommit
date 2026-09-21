@@ -34,8 +34,7 @@ python-dotenv
 matplotlib
 
 # Backend services
-supabase
-python-telegram-bot
+# The notification API uses the existing JSON storage and Python stdlib.
 
 # Dev
 pytest

@@ -178,6 +178,7 @@ img { display: block; max-width: 100%; }
        background: var(--paper); color: var(--ink); min-height: 100%; }
 .ops .num, .ops table { font-variant-numeric: tabular-nums; }
 .ops-mono { font-family: ui-monospace, "SF Mono", "Roboto Mono", Menlo, monospace; }
+.notify-grid { grid-template-columns: minmax(0,1fr) minmax(260px,.7fr); }
 
 /* ============================================================
    WIDE — the same content re-sets as an editorial spread rather
@@ -202,5 +203,8 @@ img { display: block; max-width: 100%; }
     min-height: 30vh;
     max-height: 680px;   /* past this a landscape photo is cropped into a slab */
   }
+}
+@media (max-width: 700px) {
+  .notify-grid { grid-template-columns: 1fr !important; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

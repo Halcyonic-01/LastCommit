@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Link } from "react-router-dom";
 import { getLatest, LEADS, advisoryHorizon } from "../lib/api.js";
 import { karteFor } from "../i18n/strings.js";
+import NotificationConsole from "../components/NotificationConsole.jsx";
 
 // Two ramps, two meanings. Water hazards run blue; dry hazards run amber to red.
 // There is no single "good to bad" rainbow, because rain is not a severity.
@@ -216,7 +217,7 @@ export default function Officer() {
         </div>
       </div>
 
-      {/* broadcast is an explicit, reviewable act — never a one-tap send */}
+      {/* Notifications are an explicit, reviewable act — never a one-tap send. */}
       <div style={{ borderTop: "1px solid var(--rule2)", padding: "12px 20px", display: "flex",
         alignItems: "center", gap: 16, flexWrap: "wrap", position: "sticky", bottom: 0, background: "var(--paper2)" }}>
         <div className="ops-mono" style={{ fontSize: 11.5, color: "var(--ink2)" }}>
@@ -225,7 +226,7 @@ export default function Officer() {
         <button type="button" disabled={!queued.length || beyond}
           style={{ padding: "11px 20px", fontSize: 13, fontWeight: 700, background: queued.length && !beyond ? "#5aa3dc" : "var(--paper3)",
             color: queued.length && !beyond ? "#0d1418" : "var(--ink3)", border: "none" }}>
-          Review broadcast →
+          Review alert →
         </button>
         <div className="ops-mono" style={{ fontSize: 10.5, color: "var(--ink3)" }}>
           {beyond ? "blocked past the advisory horizon" : "opens a preview in Kannada before anything is sent"}
@@ -233,6 +234,7 @@ export default function Officer() {
       </div>
 
       {err ? <div style={{ padding: 16, color: "var(--risk)" }}>Could not load forecast: {err}</div> : null}
+      {latest && rows.length ? <NotificationConsole rows={rows} lead={LEADS[lead]} forecastDate={dates?.start || latest.meta?.valid_from} /> : null}
       <style>{`@media (min-width: 1040px){ .ops-grid { grid-template-columns: minmax(0,1.25fr) minmax(0,1fr) !important; } }`}</style>
     </div>
   );

@@ -14,7 +14,7 @@ SIH 2026 · PS 26086 · Ministry of Earth Sciences (MoES) / NCMRWF
 ECMWF EC46 (51 members, 46 days) + a LightGBM model trained on 34 seasons of IMD rainfall
 and ENSO/IOD/MJO indices → blended by lead time, isotonically calibrated → probabilities of
 onset, false onset, dry spell and heavy rain at 1–4 weeks → ICAR-CRIDA-cited crop advisories
-→ delivered in Kannada by voice, WhatsApp and Telegram.
+→ delivered in Kannada by voice and a WhatsApp-compatible notification dispatcher (currently simulated).
 
 Scored with **Brier Skill Score against climatology**, never bare accuracy.
 
@@ -50,8 +50,7 @@ cp .env.example .env
 Every command below uses `.venv/bin/python` rather than an activated shell, so you can
 copy-paste them into any terminal without worrying about which venv is live.
 
-`.env` can stay empty for now. Nothing in the data pipeline, the model or the web app reads
-it — only the Telegram sender does, and that is step 6.
+`.env` can stay empty for now. The demo notification provider requires no credentials.
 
 ## 2. What a fresh clone does *not* contain
 
@@ -96,7 +95,7 @@ fetches. **`npm run dev` does not do this for you** — skip it and every screen
 load error. `npm run build` *does* run it automatically, via `scripts/prebuild.mjs`.
 
 Six screens: `/` onboarding · `/today` the advisory · `/why` the explanation ·
-`/rain` the farmer's rain report · `/officer` the map · `/verify` the honesty page.
+`/rain` the farmer's rain report · `/officer` the map and Notification Console · `/verify` the honesty page.
 
 ## 4. Get the data (~1.0 GB, ~25 min)
 
@@ -149,17 +148,36 @@ Order matters — each step reads the one before it.
 34 seasons × 122 days, with the onset / false-onset / dry-spell / heavy-rain labels and
 the causal features the model trains on. See *Reading the feature table* below.
 
-## 6. Telegram (optional)
+## 6. Notification Console (simulated WhatsApp)
 
-Get a token from [@BotFather](https://t.me/BotFather), put it in `.env` as
-`TELEGRAM_BOT_TOKEN`, then:
+The officer page now follows this flow without changing prediction/model code:
 
-```bash
-.venv/bin/python scripts/telegram_setup.py
+```
+forecast area payload → existing recommendation → notification dispatcher
+  → simulated WhatsApp provider → data/notifications.json → officer history
 ```
 
-It prints your chat id — paste that into `.env` as `TELEGRAM_CHAT_ID`. Then
-`services/telegram/send.py` will deliver a real Kannada advisory to your phone.
+Start the local API in one terminal:
+
+```bash
+python -m services.notifications.server
+```
+
+Start the frontend in another terminal:
+
+```bash
+cd web && npm run dev
+```
+
+Open `/officer`, choose a location, enter a farmer name, review the WhatsApp-style
+preview, and press **Send Alert · WhatsApp DEMO**. The API is available at
+`http://127.0.0.1:8000/api/notifications` for `GET`, `POST`, and `PATCH` requests.
+Every record is marked `SIMULATED` and the provider never claims a real WhatsApp
+delivery. Duplicate sends for the same farmer/area/forecast window are rejected.
+The provider boundary is `services/notifications/providers.py`; a future WhatsApp
+Cloud implementation can replace the provider without changing forecast or recommendation code.
+The JSON store is created on first send and is intentionally ignored by git so local
+notification history is not committed.
 
 **Never commit `.env`.** It is gitignored; keep it that way.
 
@@ -249,7 +267,7 @@ src/varshadrishti/
 rules/       default.yaml + districts/*.yaml — district plans override by rule id
 schema/      the frozen data contract (JSON Schema 2020-12)
 web/         React + Vite PWA
-services/    telegram sender
+services/    notification dispatcher + simulated WhatsApp provider
 tests/       one file per phase, P0 → P4
 ```
 

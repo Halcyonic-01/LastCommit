@@ -9,6 +9,20 @@ export const getIndex  = () => json("/forecast/index.json");
 export const getArea   = (areaId) => json(`/forecast/area/${areaId}.json`);
 export const getLatest = () => json("/forecast/latest.json");
 
+const NOTIFICATION_API = import.meta.env.VITE_NOTIFICATION_API || "http://127.0.0.1:8000/api";
+async function notificationJson(path, options = {}) {
+  const r = await fetch(`${NOTIFICATION_API}${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error || `Notification API → ${r.status}`);
+  return body;
+}
+export const getNotifications = () => notificationJson("/notifications");
+export const createNotification = (payload) => notificationJson("/notifications", { method: "POST", body: JSON.stringify(payload) });
+export const updateNotification = (id, status, detail) => notificationJson(`/notifications/${id}`, { method: "PATCH", body: JSON.stringify({ status, detail }) });
+
 export const LEADS = ["w1", "w2", "w3", "w4"];
 
 /** Leads we are allowed to advise on. Past this the contract only permits "outlook". */

@@ -131,18 +131,25 @@ def test_rule_coverage_is_not_one_rule_for_everything():
     assert len(used) >= 3, f"only {used} fired across the whole state"
 
 
-# --- the Telegram message --------------------------------------------------
+# --- the notification dispatcher -------------------------------------------
 
 
-def test_telegram_message_carries_the_decision_and_its_source():
-    sys.path.insert(0, str(ROOT / "services" / "telegram"))
-    import send  # noqa: PLC0415
-
-    text = send.compose(FORECAST / "area" / "KGIS-H-180901.json")
-    assert "ಬಿತ್ತನೆ" in text, "no Kannada sowing instruction"
-    assert "CRIDA" in text, "no citation"
-    assert "ಅಂದಾಜು" in text, "weeks 3-4 must be marked as outlook"
-    assert "%" in text
+def test_notification_dispatcher_uses_simulated_whatsapp(tmp_path, monkeypatch):
+    import services.notifications.store as notification_store
+    from services.notifications.dispatcher import dispatch
+    monkeypatch.setattr(notification_store, "PATH", tmp_path / "notifications.json")
+    record, duplicate = dispatch({
+        "idempotency_key": "test-p3-notification",
+        "farmer": {"name": "Test Farmer", "location": "Test Taluk", "phone": ""},
+        "crop": "ragi",
+        "risk_level": "high",
+        "recommendation": {"action_en": "Delay sowing", "action_kn": "ಬಿತ್ತನೆ ಮುಂದೂಡಿ"},
+        "channel": "whatsapp",
+    })
+    assert not duplicate
+    assert record["channel_mode"] == "SIMULATED / DEMO"
+    assert record["status"] == "simulated"
+    assert "not sent" in record["history"][-1]["detail"]
 
 
 # --- the built web app -----------------------------------------------------

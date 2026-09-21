@@ -13,6 +13,7 @@ IMPLEMENTATION_PLAN.md
 data/raw/*
 data/interim/*
 data/processed/*.parquet
+data/notifications.json
 # but the precomputed area-weight matrices ARE inputs the nightly Action needs
 !data/processed/weights_*.parquet
 
