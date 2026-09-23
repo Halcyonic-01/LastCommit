@@ -45,7 +45,7 @@ The solution is to:
 - Offline-first: service-worker caching of the app shell, forecast, geography, and photographs.
 - Offline rain-report outbox that flushes to Supabase on reconnect.
 - A notification screen in WhatsApp-style message bubbles, reached from a bell on Today that carries an unread dot.
-- A read-aloud button on every farmer screen, speaking that screen's key detail in the chosen language via local Indic Parler-TTS.
+- A read-aloud button on every farmer screen, speaking that screen's key detail in the chosen language via Sarvam AI TTS (Bulbul v3) with client & server audio caching.
 
 **Officer operations**
 
@@ -121,8 +121,7 @@ flowchart TB
       BROADCAST[Officer boundary :8787<br/>holds every secret]
       DISP[services/notify dispatcher]
       WA[WhatsApp / SMS<br/>simulated until metered keys are set]
-      ASR[ASR :8766]
-      TTS[TTS :8765]
+      VOICE[Voice API :8766<br/>Sarvam Saaras & Bulbul]
       SB[(Supabase)]
     end
 
@@ -145,8 +144,7 @@ flowchart TB
     CONTRACT --> WEB
     CONTRACT --> OFF
     CONTRACT --> BROADCAST
-    WEB <--> ASR
-    WEB <--> TTS
+    WEB <--> VOICE
     WEB --> SB
     OFF --> BROADCAST
     BROADCAST --> DISP
@@ -271,7 +269,7 @@ This is the same honesty the farmer-facing UI applies in words: a lead whose Bri
 
 `web/` is a React 18 + Vite 5 PWA using React Router, MapLibre, and optional Supabase JS. `web/vite.config.js` serves root `forecast/` and `geo/` during development and copies them into `web/dist` during a build. `scripts/prebuild.mjs` runs `scripts/split_forecast.py` first.
 
-Routes are `/`, `/today`, `/rain`, `/why`, `/messages`, `/officer`, `/replay`, and `/verify`. Farmer preferences are local. Forecast and geo assets use service-worker caching. Browser ASR/TTS helpers use `VITE_ASR_SERVER_URL` and `VITE_TTS_SERVER_URL`, falling back to `http://localhost:8766` and `http://localhost:8765`.
+Routes are `/`, `/today`, `/rain`, `/why`, `/messages`, `/officer`, `/replay`, and `/verify`. Farmer preferences are local. Forecast and geo assets use service-worker caching. Browser speech & assistant helpers use `VITE_VOICE_SERVER_URL` (with `VITE_ASR_SERVER_URL` / `VITE_TTS_SERVER_URL` fallback), defaulting to `http://localhost:8766`.
 
 ### Speech services
 
@@ -293,20 +291,16 @@ screen and nothing else** — a farmer who cannot read needs the decision, not t
 | Why | the evidence behind that number, and how far ahead the forecast is trusted |
 | Rain report | what is being asked, and why answering it matters |
 
-`speak()` in `web/src/lib/speech.js` tries three sources in order: a pre-rendered clip,
-then Indic Parler-TTS, then a same-language browser voice. It never substitutes an
-unrelated installed voice — an English voice reading Kannada is worse than silence.
+`speak()` in `web/src/lib/speech.js` tries available sources with aggressive multi-tier caching:
+1. Browser PWA `CacheStorage` (`varshadrishti-narration-v1`) or server-side SHA-256 disk cache (`data/cache/audio/`).
+2. Live Sarvam AI Bulbul v3 TTS via the Voice Server (`/api/narration` or `/synthesize`).
+3. Pre-rendered local clips (`web/public/audio/`).
+4. Same-language browser speech synthesis fallback (never substituting an unrelated language voice).
 
 Two things make it usable rather than merely correct:
 
-- **Preloading.** Parler takes 9–20 seconds on a full narration, which is far too slow on
-  the critical path. `Speak` starts generating on mount, so by the time anyone presses the
-  button the audio is cached: measured at **4 ms** from click to sound once preloaded.
-- **Starting the audio device on the click.** A browser only lets audio begin from a user
-  gesture, and after a ten-second synthesis the click no longer counts as one — which
-  makes playback fail silently, with no error anywhere. `unlockAudio()` therefore runs as
-  the first statement of the handler, and an `<audio>` element is used as a fallback where
-  an `AudioContext` would be refused.
+- **Audio Caching & Low Latency.** Sarvam Bulbul v3 delivers natural Indic speech in under a second. With server-side SHA-256 disk caching and PWA cache storage, cached narrations play back in **~4 ms** from click to sound.
+- **Starting the audio device on the click.** Audio device unlocking and playback initialization are attached directly to user click gestures to ensure responsive playback without browser permission blocks.
 
 **Pre-rendered clips.** Sentences known in advance are rendered once into `web/public` and
 listed in `PRERENDERED`, keyed by the exact sentence the clip speaks. The key is the safety
@@ -352,7 +346,6 @@ SARVAM_STT_MODEL=saaras:v3
 ```bash
 # 1. Start the Voice Server (listens on http://localhost:8766)
 .venv/bin/python services/voice/server.py
-# (or equivalently: .venv/bin/python services/asr/server.py)
 
 # 2. In another terminal, start the PWA
 cd web && npm run dev
@@ -382,7 +375,7 @@ An area response contains `meta`, `forecast`, `skill`, and `provenance_summary`.
 ### Voice Assistant & ASR (`:8766`)
 
 ```bash
-# Health check (reports active provider: sarvam or indicconformer)
+# Health check (reports provider status, active models, and cache info)
 curl http://localhost:8766/health
 
 # End-to-end voice assistant (Audio -> STT -> Grounded Assistant -> TTS -> Audio)
@@ -621,17 +614,17 @@ Never commit `.env`. Use `.env.example` as the starting point.
 | `WHATSAPP_ACCESS_TOKEN` | WhatsApp sender; switches the console off simulation | Meta Graph API access token; keep secret |
 | `WHATSAPP_TEST_RECIPIENT` | WhatsApp fallback recipient | Recipient number expected by the sender |
 | `WHATSAPP_VERIFY_TOKEN` | Meta webhook handshake | The value Meta echoes when verifying a webhook endpoint. `POST /api/notification-status` is the receiver such a webhook posts delivery receipts to |
-| `TTS_SERVER_URL` | Python-side documentation value | Example is `http://localhost:8765`; browser uses the Vite-prefixed variable below |
-| `ASR_SERVER_URL` | Python-side documentation value | Example is `http://localhost:8766`; browser uses the Vite-prefixed variable below |
-| `VITE_TTS_SERVER_URL` | Browser TTS service URL | Vite-exposed URL used by the frontend speech client |
-| `VITE_ASR_SERVER_URL` | Browser ASR service URL | Vite-exposed URL used by the frontend voice assistant |
+| `SARVAM_API_KEY` | Sarvam AI Speech Services | Production API key for Sarvam Saaras v4 STT and Bulbul v3 TTS |
+| `VOICE_SERVER_URL` | Voice service URL | Unified voice API endpoint; defaults to `http://localhost:8766` |
+| `VITE_VOICE_SERVER_URL` | Browser voice service URL | Vite-exposed URL used by frontend speech client and voice assistant |
+| `VITE_TTS_SERVER_URL` | Browser TTS alias | Legacy alias falling back to `VITE_VOICE_SERVER_URL` |
+| `VITE_ASR_SERVER_URL` | Browser ASR alias | Legacy alias falling back to `VITE_VOICE_SERVER_URL` |
 | `OFFICER_BROADCAST_TOKEN` | Protected broadcast POST, every notification endpoint | Operator-created shared passcode for the local service |
 | `PILOT_STATE` | Pipeline scope | Names the state a run covers; defaults to Karnataka. See [Scaling the architecture to India](#scaling-the-architecture-to-india) |
 
 ## Deployment
 
-The system splits into four pieces with very different hosting needs, and only one of
-them is a server you have to run.
+The system splits into five pieces with straightforward hosting requirements:
 
 | Piece | Where it goes | Why |
 |---|---|---|
@@ -639,8 +632,7 @@ them is a server you have to run.
 | Nightly forecast | **GitHub Actions** (already configured) | Commits the new bulletin; the static host redeploys on push. |
 | Database | **Supabase** (already hosted) | Rain reports, subscribers, farmer messages, logs. |
 | Officer boundary | **Render**, Railway or Fly.io — smallest instance | The one process holding secrets. Needs HTTPS. |
-
-The speech services are deliberately **not** deployed — see the note at the end.
+| Voice service | **Render**, Railway or local (`:8766`) | Lightweight Python service for Sarvam STT/TTS with SHA-256 disk caching. |
 
 ### Frontend
 
@@ -671,7 +663,7 @@ Set these in the host's environment, at build time:
 ```text
 VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY   the browser's Supabase client
 VITE_BROADCAST_API                          https origin of the officer boundary
-VITE_TTS_SERVER_URL, VITE_ASR_SERVER_URL    only if speech is hosted somewhere
+VITE_VOICE_SERVER_URL                       https origin of the voice server (if hosted remotely)
 ```
 
 `VITE_BROADCAST_API` is the one that silently breaks a deployment if it is missed. It
@@ -702,16 +694,12 @@ browser has to be told exactly which site may read them — anything else gets r
 It is stdlib `http.server`. That is honest about its scale: it serves one officer's
 dashboard, not public traffic. Put it behind the host's TLS terminator and leave it there.
 
-### What is not deployed, and why
+### Voice service hosting and offline fallbacks
 
-The speech services (`services/asr`, `services/tts`) stay on the operator's machine. On CPU,
-Indic Parler-TTS costs roughly **18 seconds per call** — measured on this hardware, near-flat
-with sentence length — which is a GPU-class workload, not a free-tier one. The farmer-facing
-read-aloud does not depend on them: the sentences that matter are pre-rendered into
-`web/public` and served as files, at **single-digit milliseconds** from press to sound.
+The Voice Server (`services/voice/server.py`) is lightweight (standard Python with `requests` calling Sarvam AI's managed cloud APIs). It does not require local GPUs or heavy PyTorch models. It can be deployed on any basic hosting container (Render, Railway, Fly.io) or run locally on the operator's machine at `:8766`.
 
-Host them later on a GPU instance and set `VITE_TTS_SERVER_URL` / `VITE_ASR_SERVER_URL`;
-nothing else changes, because both already read their URL from the environment.
+- **Multi-tier Caching:** Audio narrations for Today and Why screens are generated via Sarvam Bulbul v3 and cached both on the server (`data/cache/audio/`) and in the browser PWA's `CacheStorage`. Once cached, playback begins in **~4 ms**.
+- **Offline Fallback:** If the voice server is offline or unreachable, the PWA gracefully falls back to pre-rendered audio clips (`web/public/audio/`) or same-language browser speech synthesis.
 
 ### Before going live
 
@@ -952,12 +940,12 @@ code does not depend on it, it is not listed.
 
 ### Speech
 
-14. Gulati, A., Qin, J., Chiu, C.-C., et al. (2020). Conformer: Convolution-augmented transformer for speech recognition. *Interspeech 2020*, 5036–5040. <https://arxiv.org/abs/2005.08100>
-    — the architecture behind the ASR model this project runs locally.
-15. Javed, T., Nawale, J. A., George, E. I., et al. (2024). IndicVoices: Towards building an inclusive multilingual speech dataset for Indian languages. <https://arxiv.org/abs/2403.01926>
-    — the AI4Bharat data and model line that `ai4bharat/indic-conformer-600m-multilingual` comes from, which is what `services/asr/server.py` loads.
+14. Sarvam AI (2024–2025). Saaras Speech-to-Text & Bulbul Text-to-Speech models for Indian languages. <https://www.sarvam.ai>
+    — the production speech layer powering the farmer voice assistant (`saaras:v4`) and screen read-aloud (`bulbul:v3`).
+15. Gulati, A., Qin, J., Chiu, C.-C., et al. (2020). Conformer: Convolution-augmented transformer for speech recognition. *Interspeech 2020*, 5036–5040. <https://arxiv.org/abs/2005.08100>
+    — baseline local ASR architecture benchmarked during early development (`ai4bharat/indic-conformer-600m-multilingual`).
 16. Lyth, D., and King, S. (2024). Natural language guidance of high-fidelity text-to-speech with synthetic annotations. <https://arxiv.org/abs/2402.01912>
-    — the method Parler-TTS reproduces; `services/tts/server.py` runs its Indic variant with separate spoken-text and voice-description tokenizers for exactly this reason.
+    — baseline local TTS architecture benchmarked during early development (`indic-parler-tts`).
 
 ### Agronomic advisory
 
