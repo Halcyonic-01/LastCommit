@@ -34,6 +34,9 @@ forecast/area/
 
 # Tracked: daily EC46 responses, so a demo survives an Open-Meteo outage
 !data/cache/
+# Audio cache & runtime generated narration audio (never push to git)
+data/cache/audio/
+web/public/audio/
 
 # Trained models: P6's nightly job does INFERENCE, so the boosters and calibration maps
 # have to ship (3.5 MB, changes only on a retrain). metrics.json is tracked too — it is

@@ -32,12 +32,20 @@ export const S = {
   // Voice assistant
   voiceAssistant: { kn: "ಧ್ವನಿ ಸಹಾಯಕ", hi: "आवाज़ सहायक", te: "వాయిస్ అసిస్టెంట్", en: "Voice Assistant" },
   holdToSpeak:    { kn: "ಒತ್ತಿ ಹಿಡಿದು ಮಾತನಾಡಿ", hi: "दबाकर बोलें", te: "నొక్కి పట్టి మాట్లాడండి", en: "Hold to speak" },
+  tapToSpeak:     { kn: "ಮಾತನಾಡಲು ಒತ್ತಿ", hi: "बोलने के लिए दबाएँ", te: "మాట్లాడటానికి నొక్కండి", en: "Tap to speak" },
+  tapToStop:      { kn: "ನಿಲ್ಲಿಸಲು ಒತ್ತಿ", hi: "रोकने के लिए दबाएँ", te: "ఆపడానికి నొక్కండి", en: "Tap to stop" },
   listening:      { kn: "ಕೇಳುತ್ತಿದ್ದೇವೆ…", hi: "सुन रहे हैं…", te: "వింటున్నాం…", en: "Listening…" },
-  processing:     { kn: "ಅರ್ಥ ಮಾಡಿಕೊಳ್ಳುತ್ತಿದ್ದೇವೆ…", hi: "समझ रहे हैं…", te: "అర్థం చేసుకుంటున్నాం…", en: "Processing…" },
+  processing:     { kn: "ಸಂಸ್ಕರಿಸಲಾಗುತ್ತಿದೆ…", hi: "प्रोसेस हो रहा है…", te: "ప్రాసెస్ అవుతోంది…", en: "Processing…" },
+  understanding:  { kn: "ಅರ್ಥ ಮಾಡಿಕೊಳ್ಳುತ್ತಿದ್ದೇವೆ…", hi: "समझ रहे हैं…", te: "అర్థం చేసుకుంటున్నాం…", en: "Understanding…" },
+  generating:     { kn: "ಉತ್ತರ ಸಿದ್ಧವಾಗುತ್ತಿದೆ…", hi: "जवाब तैयार हो रहा है…", te: "సమాధానం సిద్ధమవుతోంది…", en: "Generating response…" },
+  speaking:       { kn: "ಹೇಳುತ್ತಿದ್ದೇವೆ…", hi: "बोल रहे हैं…", te: "చెబుతున్నాం…", en: "Speaking…" },
+  voiceError:     { kn: "ಮಾತನಾಡಿದ್ದು ಅರ್ಥವಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.", hi: "बात समझ में नहीं आई। कृपया फिर से कोशिश करें।", te: "అర్థం కాలేదు. దయచేసి మళ్ళీ ప్రయత్నించండి.", en: "Could not understand. Please try again." },
   youSaid:        { kn: "ನೀವು ಹೇಳಿದ್ದು", hi: "आपने कहा", te: "మీరు చెప్పింది", en: "You said" },
   tryAgain:       { kn: "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ", hi: "फिर से कोशिश करें", te: "మళ్ళీ ప్రయత్నించండి", en: "Try again" },
 
   listen:     { kn: "ಕೇಳಿ", hi: "सुनें", te: "వినండి", en: "Listen" },
+  preparing:  { kn: "ಸಿದ್ಧವಾಗುತ್ತಿದೆ…", hi: "तैयार हो रहा है…", te: "సిద్ధమవుతోంది…", en: "Preparing…" },
+  stop:       { kn: "ನಿಲ್ಲಿಸಿ", hi: "रोकें", te: "ఆపండి", en: "Stop" },
   back:       { kn: "ಹಿಂದೆ", hi: "पीछे", te: "వెనుకకు", en: "Back" },
 
   today:      { kn: "ಇಂದು", hi: "आज", te: "ఈరోజు", en: "Today" },

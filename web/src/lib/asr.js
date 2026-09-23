@@ -1,10 +1,10 @@
 // ASR server availability check — mirrors the pattern in speech.js for Parler TTS.
 
 export const ASR_URL = import.meta.env.VITE_ASR_SERVER_URL || "http://localhost:8766";
-// IndicConformer is an Indic-only checkpoint; English remains available for
-// the rest of the UI/TTS but has no server-side ASR model behind it.
-export const ASR_SUPPORTED_LANGS = ["kn", "hi", "te"];
-export const ASR_INTERPRET_LANGS = [...ASR_SUPPORTED_LANGS, "en"];
+// Sarvam AI supports 22 Indic languages and English (en-IN).
+// IndicConformer checkpoint is Indic-only (kn, hi, te).
+export const ASR_SUPPORTED_LANGS = ["kn", "hi", "te", "en"];
+export const ASR_INTERPRET_LANGS = ["kn", "hi", "te", "en"];
 
 export const normalizeSpeechLang = (lang) => {
   const code = String(lang || "kn").toLowerCase().split("-")[0];

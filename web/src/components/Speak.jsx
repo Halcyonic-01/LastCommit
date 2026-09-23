@@ -1,105 +1,160 @@
 import { useState, useEffect, useRef } from "react";
-import { speak, speakSequence, splitSentences, preloadSpeech, canSpeak, pauseSpeech, resumeSpeech, stopSpeech, isParlerAvailable, checkParlerAvailable, unlockAudio, prerenderedFile } from "../lib/speech.js";
-import { Speaker, Pause, Play } from "./Marks.jsx";
+import {
+  speak,
+  preloadSpeech,
+  canSpeak,
+  stopSpeech,
+  unlockAudio,
+  prerenderedFile,
+  waitForSpeechEnd,
+} from "../lib/speech.js";
+import { Speaker, Stop } from "./Marks.jsx";
 import { t } from "../i18n/strings.js";
 
 export default function Speak({ text, lang = "kn", variant = "pill", onPhoto = false }) {
-  // A real <audio> element, in the DOM, pointed at a file we shipped. Playing it is the
-  // first statement of the click handler with nothing awaited before it, which is the
-  // only arrangement no autoplay policy can refuse. Everything else is the fallback.
   const clip = prerenderedFile(text, lang);
   const clipRef = useRef(null);
-  const [isPaused, setIsPaused] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [hd, setHd] = useState(isParlerAvailable());
+  const [status, setStatus] = useState("idle"); // "idle" | "preparing" | "playing"
 
-  // Re-check once the async health probe resolves on page load.
   useEffect(() => {
-    checkParlerAvailable().then((ok) => setHd(ok)).catch(() => {});
-    // Generate the selected language in the background so tapping Listen does
-    // not have to wait for the neural synthesizer on the critical path.
-    const timer = setTimeout(() => preloadSpeech(text, lang), 80);
-    // A language switch must stop any audio generated for the previous text.
+    // Background preload into memory & browser cache
+    const timer = setTimeout(() => preloadSpeech(text, lang), 100);
     return () => {
       clearTimeout(timer);
       stopSpeech();
+      setStatus("idle");
     };
   }, [text, lang]);
 
   if (!canSpeak() || !text) return null;
   const cls = onPhoto ? " -onphoto" : "";
-  const label = `${t("listen", lang)} — listen`;
 
-  const handleSpeak = async () => {
+  const handleStop = () => {
     const el = clipRef.current;
     if (el) {
-      try { el.currentTime = 0; } catch { /* not seekable yet */ }
-      el.play().catch(() => {});      // synchronous: still inside the click
-      setIsPaused(false);
+      try {
+        el.pause();
+        el.currentTime = 0;
+      } catch {}
+    }
+    stopSpeech();
+    setStatus("idle");
+  };
+
+  const handleSpeak = async () => {
+    if (status === "playing") {
+      handleStop();
       return;
     }
-    // Synthesis can take several seconds, and by the time the audio arrives this click
-    // no longer counts as a user gesture — so open the audio device now, not then.
-    unlockAudio();
-    setIsPaused(false);
-    setIsPlaying(true);
-    // One sentence at a time: the first plays while the rest are still being made,
-    // instead of the farmer waiting for the whole paragraph before hearing anything.
-    await speakSequence(splitSentences(text), lang);
-    setIsPlaying(false);
-  };
 
-  const handleToggle = () => {
+    if (status === "preparing") {
+      handleStop();
+      return;
+    }
+
     const el = clipRef.current;
-    if (isPaused) {
-      if (el) el.play().catch(() => {}); else resumeSpeech();
-      setIsPaused(false);
-    } else {
-      if (el) el.pause(); else pauseSpeech();
-      setIsPaused(true);
+    if (el) {
+      try {
+        el.currentTime = 0;
+        el.play().then(() => {
+          setStatus("playing");
+        }).catch(() => {});
+        return;
+      } catch {
+        // Fall back to server synthesis if pre-rendered playback fails
+      }
+    }
+
+    unlockAudio();
+    setStatus("preparing");
+
+    try {
+      const ok = await speak(text, lang);
+      if (ok) {
+        setStatus("playing");
+        await waitForSpeechEnd();
+        setStatus("idle");
+      } else {
+        setStatus("idle");
+      }
+    } catch {
+      setStatus("idle");
     }
   };
 
-  const Clip = clip ? <audio ref={clipRef} src={clip} preload="auto" /> : null;
-
-  const Icon = isPaused ? Play : Pause;
-  const toggleLabel = isPaused ? "Resume" : "Pause";
-
-  const HdBadge = hd ? (
-    <span
-      title="High-quality Indic Parler-TTS"
-      style={{
-        fontSize: 9, fontWeight: 800, letterSpacing: ".06em",
-        background: "var(--green, #2d9e5f)", color: "#fff",
-        borderRadius: 3, padding: "1px 4px", lineHeight: 1.4,
-        verticalAlign: "middle", marginLeft: 3,
-      }}
-    >HD</span>
+  const Clip = clip ? (
+    <audio
+      ref={clipRef}
+      src={clip}
+      preload="auto"
+      onEnded={() => setStatus("idle")}
+    />
   ) : null;
+
+  const isPreparing = status === "preparing";
+  const isPlaying = status === "playing";
+
+  const getLabel = () => {
+    if (isPlaying) return t("stop", lang);
+    if (isPreparing) return t("preparing", lang);
+    return t("listen", lang);
+  };
+
+  const renderIcon = () => {
+    if (isPlaying) return <Stop size={variant === "icon" ? 20 : 18} />;
+    if (isPreparing) {
+      return (
+        <span
+          style={{
+            display: "inline-block",
+            width: 14,
+            height: 14,
+            borderRadius: "50%",
+            border: "2px solid currentColor",
+            borderRightColor: "transparent",
+            animation: "spin 0.8s linear infinite",
+          }}
+        />
+      );
+    }
+    return <Speaker size={variant === "icon" ? 22 : 20} />;
+  };
 
   if (variant === "icon") {
     return (
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <div style={{ display: "inline-flex", alignItems: "center" }}>
         {Clip}
-        <button type="button" className={`speak-ico${cls}`} onClick={handleSpeak}
-          aria-label={label} disabled={isPlaying}>
-          <Speaker size={22} />{HdBadge}
-        </button>
-        <button type="button" className={`speak-ico${cls}`} onClick={handleToggle} aria-label={toggleLabel}>
-          <Icon size={22} />
+        <button
+          type="button"
+          className={`speak-ico${cls}${isPlaying ? " -active" : ""}`}
+          onClick={handleSpeak}
+          aria-label={getLabel()}
+          title={getLabel()}
+        >
+          {renderIcon()}
         </button>
       </div>
     );
   }
+
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+    <div style={{ display: "inline-flex", alignItems: "center" }}>
       {Clip}
-      <button type="button" className={`speak${cls}`} onClick={handleSpeak}
-        aria-label={label} disabled={isPlaying}>
-        <Speaker size={20} /> {t("listen", lang)}{HdBadge}
-      </button>
-      <button type="button" className={`speak-ico${cls}`} onClick={handleToggle} aria-label={toggleLabel}>
-        <Icon size={22} />
+      <button
+        type="button"
+        className={`speak${cls}${isPlaying ? " -active" : ""}`}
+        onClick={handleSpeak}
+        aria-label={getLabel()}
+        style={{
+          cursor: "pointer",
+          transition: "all 0.2s ease",
+          background: isPlaying ? "var(--ink)" : "transparent",
+          color: isPlaying ? "var(--paper2)" : "inherit",
+          borderColor: isPlaying ? "var(--ink)" : undefined,
+        }}
+      >
+        {renderIcon()}
+        <span>{getLabel()}</span>
       </button>
     </div>
   );

@@ -1,11 +1,13 @@
 // Language-safe text-to-speech for the farmer pages.
-// Local Indic Parler-TTS is primary; browser speech is a strict same-language fallback.
+// Unified VarshaDrishti Voice Server (Sarvam Bulbul v3 primary) with browser fallback.
 
-const TTS_URL = import.meta.env.VITE_TTS_SERVER_URL || "http://localhost:8765";
+const TTS_URL = import.meta.env.VITE_VOICE_SERVER_URL || import.meta.env.VITE_TTS_SERVER_URL || "http://localhost:8766";
 const SPEECH_LANG = { kn: "kn-IN", hi: "hi-IN", te: "te-IN", en: "en-IN" };
 const SUPPORTED_LANGS = new Set(Object.keys(SPEECH_LANG));
 
-let _parlerAvailable = null;
+const CACHE_NAME = "varshadrishti-narration-v1";
+
+let _voiceAvailable = null;
 let _healthRequest = null;
 let _currentSource = null;
 let _currentEl = null;   // HTMLAudioElement fallback when Web Audio is blocked
@@ -15,24 +17,39 @@ let _speechGeneration = 0;
 const _audioCache = new Map();
 const _audioRequests = new Map();
 
+async function _readCacheStorage(key) {
+  if (typeof window === "undefined" || !("caches" in window)) return null;
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const hit = await cache.match(key);
+    if (hit) return await hit.arrayBuffer();
+  } catch {
+    // CacheStorage unavailable or private browsing
+  }
+  return null;
+}
+
+async function _writeCacheStorage(key, buffer) {
+  if (typeof window === "undefined" || !("caches" in window)) return;
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const resp = new Response(buffer.slice(0), {
+      headers: { "Content-Type": "audio/wav", "Cache-Control": "public, max-age=2592000" },
+    });
+    await cache.put(key, resp);
+  } catch {
+    // ignore write error
+  }
+}
+
 function normalizeLang(lang) {
   const code = String(lang || "kn").toLowerCase().split("-")[0];
   return SUPPORTED_LANGS.has(code) ? code : "kn";
 }
 
-function _audioKey(text, lang) { return `tts-v3\u0000${lang}\u0000${text}`; }
+function _audioKey(text, lang) { return `tts-v4\u0000${lang}\u0000${text}`; }
 
-// Pre-rendered clips shipped in web/public. Indic Parler-TTS takes several seconds on
-// a sentence this long, which is too slow to demonstrate live, so the sentences we know
-// in advance are rendered once and served as files.
-//
-// The key is the EXACT sentence the clip speaks. That is the whole safety property: if
-// the forecast changes and the advisory text changes with it, the key stops matching and
-// synthesis takes over. A stale clip can never speak advice the screen is not showing.
-// `kind` says what the clip is allowed to be, and the tests enforce it:
-//   advisory  — must be a sentence some CRIDA rule actually emits
-//   narration — generated from the live bulletin by scripts/prerender_narration.py,
-//               so it can only ever be what the screen itself computed
+// Pre-rendered clips shipped in web/public and web/public/audio/narration.
 const PRERENDERED = [
   { lang: "kn", kind: "advisory", file: "/demo_crida.wav",
     text: "ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಿ, ಈ ವಾರ ಮಳೆಯ ಅಗತ್ಯವಿರುವ ಕೆಲಸ ಮುಂದೂಡಿ" },
@@ -40,17 +57,16 @@ const PRERENDERED = [
     text: "Kasaba, Tumakuru. ಮಳೆ ಬರುವುದು ಖಚಿತವಿಲ್ಲ. ಬಿತ್ತನೆಗೆ ಸ್ವಲ್ಪ ಕಾಯಿರಿ. ಕಳೆದ 10 ವರ್ಷಗಳಲ್ಲಿ 5 ವರ್ಷ ಇದೇ ಸಮಯಕ್ಕೆ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು. ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಿ, ಈ ವಾರ ಮಳೆಯ ಅಗತ್ಯವಿರುವ ಕೆಲಸ ಮುಂದೂಡಿ" },
   { lang: "kn", kind: "narration", file: "/narration_why_kn.wav",
     text: "ಕಳೆದ 5 ವರ್ಷಗಳ ಮಳೆ ದಾಖಲೆಯನ್ನು ಇಂದಿನ ಸ್ಥಿತಿಯ ಜೊತೆ ಹೋಲಿಸಿದ್ದೇವೆ. ಹತ್ತರಲ್ಲಿ 5 ವರ್ಷ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು. ಈ ಆ್ಯಪ್ 1ನೇ ವಾರದವರೆಗೆ ಮಾತ್ರ ಏನು ಮಾಡಬೇಕೆಂದು ಹೇಳುತ್ತದೆ. ಅದರ ನಂತರ ಅಂದಾಜು ಮಾತ್ರ. ಈ ಹೋಬಳಿಯ 34 ವರ್ಷಗಳ ಐಎಂಡಿ ಮಳೆ ದಾಖಲೆ, ಮುಂದಿನ ನಾಲ್ಕು ವಾರಗಳಿಗೆ 51 ಇಸಿಎಂಡಬ್ಲ್ಯೂಎಫ್ ಮಾದರಿ ಓಟಗಳು, ಮತ್ತು ಬೆಳೆ ಸಲಹೆಗೆ ಐಸಿಎಆರ್-ಕ್ರಿಡಾ ಜಿಲ್ಲಾ ಯೋಜನೆ." },
+  { lang: "kn", kind: "narration", file: "/audio/narration/KGIS-H-180901_today_kn.wav",
+    text: "Kasaba, Tumakuru. ಮಳೆ ಬರುವುದು ಖಚಿತವಿಲ್ಲ. ಬಿತ್ತನೆಗೆ ಸ್ವಲ್ಪ ಕಾಯಿರಿ. ಕಳೆದ 10 ವರ್ಷಗಳಲ್ಲಿ 5 ವರ್ಷ ಇದೇ ಸಮಯಕ್ಕೆ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು. ಮಣ್ಣಿನ ತೇವ ಉಳಿಸಿ, ಈ ವಾರ ಮಳೆಯ ಅಗತ್ಯವಿರುವ ಕೆಲಸ ಮುಂದೂಡಿ" },
+  { lang: "kn", kind: "narration", file: "/audio/narration/KGIS-H-180901_why_kn.wav",
+    text: "ಕಳೆದ 5 ವರ್ಷಗಳ ಮಳೆ ದಾಖಲೆಯನ್ನು ಇಂದಿನ ಸ್ಥಿತಿಯ ಜೊತೆ ಹೋಲಿಸಿದ್ದೇವೆ. ಹತ್ತರಲ್ಲಿ 5 ವರ್ಷ ಒಂದು ವಾರ ಮಳೆ ನಿಂತಿತ್ತು. ಈ ಆ್ಯಪ್ 1ನೇ ವಾರದವರೆಗೆ ಮಾತ್ರ ಏನು ಮಾಡಬೇಕೆಂದು ಹೇಳುತ್ತದೆ. ಅದರ ನಂತರ ಅಂದಾಜು ಮಾತ್ರ. ಈ ಹೋಬಳಿಯ 34 ವರ್ಷಗಳ ಐಎಂಡಿ ಮಳೆ ದಾಖಲೆ, ಮುಂದಿನ ನಾಲ್ಕು ವಾರಗಳಿಗೆ 51 ಇಸಿಎಂಡಬ್ಲ್ಯೂಎಫ್ ಮಾದರಿ ಓಟಗಳು, ಮತ್ತು ಬೆಳೆ ಸಲಹೆಗೆ ಐಸಿಎಆರ್-ಕ್ರಿಡಾ ಜಿಲ್ಲಾ ಯೋಜನೆ." },
 ];
 
 // Trailing punctuation differs between the rules engine and the ASR server's reply
 // ("...ಮುಂದೂಡಿ" vs "...ಮುಂದೂಡಿ."); nothing else is allowed to differ.
 const _norm = (t) => String(t || "").replace(/\s+/g, " ").trim().replace(/[.।]+$/, "");
 
-// A browser only lets audio start from a user gesture. The assistant's reply arrives
-// several awaits later, by which time the gesture is gone and play() is refused — which
-// is why the clip existed and was never heard. So: build the element ON the press, play
-// and immediately pause it (that is what marks it unlocked), and keep it. Playing it
-// later then needs no gesture at all.
 const _primed = new Map();
 
 export function primePrerendered() {
@@ -80,8 +96,7 @@ export function playPrerenderedNow(text, lang = "kn") {
   return true;
 }
 
-/** The clip file for this exact sentence, or null. Exact only: a clip that merely
- *  appears inside a longer narration would speak one line and drop the rest. */
+/** The clip file for this exact sentence, or null. */
 export function prerenderedFile(text, lang = "kn") {
   const clip = _prerendered(text, lang);
   return clip ? clip.file : null;
@@ -102,43 +117,52 @@ async function _fetchPrerendered(clip) {
   return bytes;
 }
 
-// A failed probe is not permanent: the user may start the TTS server after opening the PWA.
 export async function checkParlerAvailable(force = false) {
-  if (!force && _parlerAvailable !== null) return _parlerAvailable;
+  return checkVoiceAvailable(force);
+}
+
+export async function checkVoiceAvailable(force = false) {
+  if (!force && _voiceAvailable !== null) return _voiceAvailable;
   if (_healthRequest && !force) return _healthRequest;
-  _healthRequest = fetch(`${TTS_URL}/health`, { signal: AbortSignal.timeout(1500) })
-    .then((res) => { _parlerAvailable = res.ok; return _parlerAvailable; })
-    .catch(() => { _parlerAvailable = false; return false; })
+  _healthRequest = fetch(`${TTS_URL}/health`, { signal: AbortSignal.timeout(2000) })
+    .then((res) => { _voiceAvailable = res.ok; return _voiceAvailable; })
+    .catch(() => { _voiceAvailable = false; return false; })
     .finally(() => { _healthRequest = null; });
   return _healthRequest;
 }
 
-export const isParlerAvailable = () => _parlerAvailable === true;
-if (typeof window !== "undefined") checkParlerAvailable().catch(() => {});
+export const isParlerAvailable = () => _voiceAvailable === true;
+if (typeof window !== "undefined") checkVoiceAvailable().catch(() => {});
 
-async function _fetchParlerAudio(text, lang) {
+export async function _fetchServerAudio(text, lang) {
   lang = normalizeLang(lang);
   const key = _audioKey(text, lang);
   if (_audioCache.has(key)) return _audioCache.get(key);
+
+  // Check browser offline CacheStorage first
+  const offlineHit = await _readCacheStorage(key);
+  if (offlineHit) {
+    _audioCache.set(key, offlineHit);
+    return offlineHit;
+  }
+
   if (_audioRequests.has(key)) return _audioRequests.get(key);
   const request = (async () => {
-    // Retry after an earlier failure so starting the local service after the
-    // page opened still works without a reload.
-    if (!(await checkParlerAvailable(_parlerAvailable === false))) return null;
     try {
       const res = await fetch(`${TTS_URL}/synthesize`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "audio/wav" },
         body: JSON.stringify({ text, lang }),
-        signal: AbortSignal.timeout(45000),
+        signal: AbortSignal.timeout(30000),
       });
       if (!res.ok || !(res.headers.get("content-type") || "").includes("audio")) return null;
       const bytes = await res.arrayBuffer();
       _audioCache.set(key, bytes);
-      while (_audioCache.size > 8) _audioCache.delete(_audioCache.keys().next().value);
+      _writeCacheStorage(key, bytes).catch(() => {});
+      while (_audioCache.size > 20) _audioCache.delete(_audioCache.keys().next().value);
       return bytes;
     } catch {
-      _parlerAvailable = false;
+      _voiceAvailable = false;
       return null;
     } finally { _audioRequests.delete(key); }
   })();
@@ -146,22 +170,18 @@ async function _fetchParlerAudio(text, lang) {
   return request;
 }
 
-/** Sentences, in reading order. Indic Parler-TTS cost grows steeply with length — a
- *  180-character narration does not return in a usable time, while its individual
- *  sentences do — so nothing hands the synthesizer a whole paragraph. */
+export const _fetchParlerAudio = _fetchServerAudio;
+
+/** Split into sentences if needed. */
 export function splitSentences(text) {
   return String(text || "").split(/(?<=[.।?])\s+/).map((x) => x.trim()).filter(Boolean);
 }
 
-/** Warm the first sentence first: that is the one standing between a press and a sound.
- *  The rest are queued behind it so they are ready by the time playback reaches them. */
+/** Preload full speech into memory and cache storage. */
 export function preloadSpeech(text, lang = "kn") {
-  const parts = splitSentences(text);
-  if (!parts.length) return Promise.resolve();
+  if (!text) return Promise.resolve();
   const l = normalizeLang(lang);
-  return _fetchParlerAudio(parts[0], l)
-    .then(() => Promise.all(parts.slice(1).map((x) => _fetchParlerAudio(x, l).catch(() => null))))
-    .catch(() => null);
+  return _fetchServerAudio(text, l).catch(() => null);
 }
 
 // Chrome only lets an AudioContext start from a user gesture. The assistant's reply
@@ -171,7 +191,7 @@ export function preloadSpeech(text, lang = "kn") {
 // second cut off the first. These let a caller wait for the audio to actually finish.
 function _signalEnd() { _endWaiters.splice(0).forEach((resolve) => resolve()); }
 
-function _waitForEnd() {
+export function waitForSpeechEnd() {
   if (!_currentSource && !_currentEl && !window.speechSynthesis?.speaking) return Promise.resolve();
   return new Promise((resolve) => _endWaiters.push(resolve));
 }
@@ -183,7 +203,7 @@ export async function speakSequence(lines, lang = "kn") {
     const generation = _speechGeneration + 1;   // speak() bumps it via stopSpeech()
     if (!(await speak(line, lang))) continue;
     if (generation !== _speechGeneration) return false;  // something newer interrupted us
-    await _waitForEnd();
+    await waitForSpeechEnd();
   }
   return true;
 }
@@ -301,17 +321,13 @@ export async function speak(text, lang = "kn") {
     if (generation !== _speechGeneration) return false;
   }
 
-  // Always try the requested-language local voice first. This fixes the common
-  // failure where Chrome's installed English voice preempts Indic Parler-TTS.
-  const bytes = await _fetchParlerAudio(text, lang);
+  // Try VarshaDrishti Voice Server (Sarvam Bulbul v3 with disk & browser caching)
+  const bytes = await _fetchServerAudio(text, lang);
   if (bytes && generation === _speechGeneration) {
-    try { if (await _playWav(bytes, generation)) return "parler"; } catch { /* fallback below */ }
+    try { if (await _playWav(bytes, generation)) return "server"; } catch { /* fallback below */ }
     if (generation !== _speechGeneration) return false;
-    // Web Audio refused — almost always because synthesis took long enough for the
-    // click to stop counting as a user gesture. An <audio> element is allowed where
-    // an AudioContext is not, so the same bytes still get heard.
     const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
-    if (await _playFile(url, generation, () => URL.revokeObjectURL(url))) return "parler";
+    if (await _playFile(url, generation, () => URL.revokeObjectURL(url))) return "server";
     URL.revokeObjectURL(url);
   }
   if (generation !== _speechGeneration) return false;

@@ -275,9 +275,12 @@ Routes are `/`, `/today`, `/rain`, `/why`, `/messages`, `/officer`, `/replay`, a
 
 ### Speech services
 
-ASR (`services/asr/server.py`): `GET /health`, `POST /transcribe` with multipart field `audio` and `X-Lang: kn|hi|te`, and `POST /interpret` for repository keyword intent matching. ffmpeg converts audio to 16 kHz mono WAV. English is supported by interpretation vocabulary, not by the IndicConformer language mask.
-
-TTS (`services/tts/server.py`): `GET /health` and `POST /synthesize` with `{ "text": "...", "lang": "kn|hi|te|en" }`, returning WAV. Indic Parler-TTS loads once at startup and uses separate spoken-text and voice-description tokenizers. First startup is slow because weights load; later requests reuse the process. Both run on the operator's own machine, so farmer audio never leaves it.
+Voice Server (`services/voice/server.py` on `:8766`):
+- `GET /health` — reports provider status, configured credentials, active models (Sarvam Saaras v4 STT, Bulbul v3 TTS), and supported languages.
+- `GET /api/narration` — pre-renders or serves cached audio for Today and Why screens directly from structured forecast JSON with `X-Cache: HIT`.
+- `POST /transcribe` — multipart audio upload; transcribes speech, evaluates grounded agricultural forecast rules, synthesizes TTS response, and returns audio + transcript.
+- `POST /synthesize` — text-to-speech with server-side SHA-256 disk caching under `data/cache/audio/`.
+- `POST /interpret` — evaluates text query against hobli forecast and CRIDA rules.
 
 ### Read-aloud
 
@@ -312,18 +315,58 @@ and synthesis takes over, so a clip can never speak advice the screen is not sho
 tests hold that line — every listed clip must ship its file, and a clip's text must be a
 sentence some CRIDA rule actually produces.
 
-### Speech to speech — planned, not in this release
+### Speech to speech — Farmer Voice Assistant (Sarvam AI)
 
-`services/asr/server.py` (IndicConformer) and `web/src/components/VoiceAssistant.jsx`
-implement hold-to-speak: record, transcribe, match the words against a finite keyword
-table in `/interpret`, and answer with the advisory. The pieces work and the code stays in
-the tree, but the assistant is **not mounted on any screen in this release**.
+VarshaDrishti features an end-to-end voice assistant designed for Indian farmers. The voice pipeline is powered by **Sarvam AI** (Saaras Speech-to-Text and Bulbul Text-to-Speech), seamlessly grounded in VarshaDrishti's agricultural forecasting and ICAR-CRIDA contingency advisory rules.
 
-It is held back on latency, not correctness. Recognition and synthesis together put ten
-seconds or more between a farmer's question and an answer, which is longer than the
-interaction is worth. Shipping the read-aloud button first gives the same information
-reliably and instantly. Re-enabling it is one import and one line in `Today.jsx`, and the
-work to do first is caching and a smaller ASR checkpoint.
+#### Conversational Pipeline
+```
+Farmer Microphone
+  → Browser upload
+  → Sarvam Saaras STT (server-side, kn-IN default)
+  → Recognized Kannada text
+  → VarshaDrishti Grounded Assistant Logic (reads hobli forecast + CRIDA rules)
+  → Grounded advice text
+  → Sarvam Bulbul TTS (server-side, kn-IN default)
+  → Playable audio returned to browser & spoken automatically
+```
+
+#### 1. Obtaining a Sarvam API Key
+1. Sign up or log in at [dashboard.sarvam.ai](https://dashboard.sarvam.ai).
+2. Go to **API Keys** and click **Generate API Key**.
+3. Copy the key and add it to your `.env` file as `SARVAM_API_KEY=your_key_here`.
+
+#### 2. Environment Configuration
+Add the following to your `.env` file (see `.env.example`):
+```bash
+VOICE_PROVIDER=sarvam
+SARVAM_API_KEY=your_sarvam_api_key_here
+SARVAM_STT_LANGUAGE=kn-IN
+SARVAM_TTS_LANGUAGE=kn-IN
+SARVAM_TTS_SPEAKER=shubh
+SARVAM_TTS_MODEL=bulbul:v3
+SARVAM_STT_MODEL=saaras:v3
+```
+
+#### 3. How to Run the Voice Assistant
+```bash
+# 1. Start the Voice Server (listens on http://localhost:8766)
+.venv/bin/python services/voice/server.py
+# (or equivalently: .venv/bin/python services/asr/server.py)
+
+# 2. In another terminal, start the PWA
+cd web && npm run dev
+```
+Open `http://localhost:5173/today`, press/hold the microphone button, and ask a question.
+
+#### 4. Supported Languages
+- **Kannada (`kn` / `kn-IN`)**: Primary tested language for all agricultural queries.
+- **Hindi (`hi` / `hi-IN`)**: Fully supported by Sarvam Saaras/Bulbul and the assistant logic.
+- **Telugu (`te` / `te-IN`)**: Fully supported by Sarvam Saaras/Bulbul and the assistant logic.
+- **English (`en` / `en-IN`)**: Supported for testing and officer interfaces.
+
+#### 5. Voice Architecture & Decommissioned Local Models
+VarshaDrishti uses **Sarvam AI** for all speech processing. The heavy local models (`ai4bharat/indic-conformer-600m-multilingual` and `indic-parler-tts`) have been decommissioned from the production runtime, eliminating gigabytes of torch weights and multi-second latencies while providing superior Indian language transcription and natural prosody.
 
 ## API reference
 
@@ -336,22 +379,44 @@ GET /forecast/area/KGIS-H-180901.json
 
 An area response contains `meta`, `forecast`, `skill`, and `provenance_summary`. `forecast` includes area identity, `p_onset`, `p_false_onset`, `p_dry7`, `p_dry14`, and `p_heavy` as `w1`–`w4` maps, onset status/delay, confidence, advisories, and English/Kannada text. Exact schemas are `schema/area.schema.json` and `schema/forecast.schema.json`.
 
-### ASR
+### Voice Assistant & ASR (`:8766`)
 
 ```bash
+# Health check (reports active provider: sarvam or indicconformer)
 curl http://localhost:8766/health
-curl -X POST http://localhost:8766/transcribe -H 'X-Lang: hi' -F 'audio=@sample.webm'
+
+# End-to-end voice assistant (Audio -> STT -> Grounded Assistant -> TTS -> Audio)
+curl -X POST http://localhost:8766/transcribe \
+  -H 'X-Lang: kn' \
+  -H 'X-Area-Id: KGIS-H-180901' \
+  -F 'audio=@recording.webm'
+
+# Text intent interpretation
+curl -X POST http://localhost:8766/interpret \
+  -H 'Content-Type: application/json' \
+  -d '{"transcript":"ನಾಳೆ ಮಳೆ ಬರುತ್ತಾ?","lang":"kn","area_id":"KGIS-H-180901"}'
+
+# Developer test endpoints:
+# 1. Test STT in isolation
+curl -X POST http://localhost:8766/api/test/stt -F 'audio=@recording.webm'
+
+# 2. Test TTS in isolation
+curl -X POST http://localhost:8766/api/test/tts \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"ನಾಳೆ ಮಳೆ ಬರುವುದು ಖಚಿತವಿಲ್ಲ.","lang":"kn"}'
 ```
 
-Response shape: `{ "transcript": "...", "lang": "hi", "action": "unknown|rain_yes|rain_no|advisory|repeat", "reply_text": "..." }`.
-
-### TTS
-
-```bash
-curl http://localhost:8765/health
-curl -X POST http://localhost:8765/synthesize \
-  -H 'Content-Type: application/json' \
-  -d '{"text":"ಇಂದು ಬಿತ್ತನೆ ಮಾಡಬೇಡಿ","lang":"kn"}' --output advisory.wav
+Response shape from `/transcribe`:
+```json
+{
+  "transcript": "ನಾಳೆ ಮಳೆ ಬರುತ್ತಾ?",
+  "lang": "kn",
+  "action": "rain_tomorrow",
+  "reply_text": "Kasaba: ನಾಳೆ ಮತ್ತು ಮುಂದಿನ ದಿನಗಳಲ್ಲಿ ಮಳೆ ಬರುವುದು ಖಚಿತವಿಲ್ಲ. ಬಿತ್ತನೆಗೆ ಸ್ವಲ್ಪ ಕಾಯಿರಿ.",
+  "audio_base64": "<base64_wav_bytes>",
+  "audio_format": "audio/wav",
+  "provider": "sarvam"
+}
 ```
 
 ### Officer broadcast service
@@ -448,14 +513,12 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m pip install -r services/asr/requirements.txt
-python -m pip install -r services/tts/requirements.txt
 cd web
 npm install
 npm run dev
 ```
 
-Install `ffmpeg` separately and ensure it is on `PATH` for ASR conversion. Open `http://localhost:5173`. The first TTS/ASR model download/load is optional and slow; browser fallbacks exist.
+Open `http://localhost:5173`.
 
 ### Forecast and model commands
 
@@ -498,12 +561,8 @@ Use `--groups onset heavy`, `--extended`, or `--no-tuned` as documented by the t
 
 ```bash
 cd /path/to/SIH
-source .venv/bin/activate
-python scripts/asr_setup.py
-python scripts/tts_setup.py
-python services/asr/server.py          # terminal 1, :8766
-python services/tts/server.py          # terminal 2, :8765
-python services/broadcast_server.py    # terminal 3, :8787 — needed by the notification console
+python services/voice/server.py        # terminal 1, :8766 (Voice Server: Sarvam Saaras + Bulbul)
+python services/broadcast_server.py    # terminal 2, :8787 — needed by the notification console
 pytest -q
 ```
 

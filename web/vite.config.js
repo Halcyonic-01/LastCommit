@@ -80,6 +80,12 @@ export default defineConfig({
             options: { cacheName: "photos", expiration: { maxEntries: 12, maxAgeSeconds: 2592000 } },
           },
           {
+            // Narration audio clips for offline playback in the field
+            urlPattern: /\/(?:audio\/narration\/.*|.*narration.*\.wav|demo_crida\.wav)$/,
+            handler: "CacheFirst",
+            options: { cacheName: "narration-audio", expiration: { maxEntries: 60, maxAgeSeconds: 2592000 } },
+          },
+          {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
             handler: "CacheFirst",
             options: { cacheName: "fonts", expiration: { maxEntries: 20, maxAgeSeconds: 31536000 } },
