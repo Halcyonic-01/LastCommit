@@ -50,7 +50,10 @@ def fetch_subscribers(channel: str | None = None, area_id: str | None = None) ->
         q = q.eq("channel", channel)
     if area_id:
         q = q.eq("area_id", area_id)
-    return q.execute().data or []
+    try:
+        return q.execute().data or []
+    except Exception:
+        return []
 
 
 def log_broadcast(*, area_ids: list[str], event: str, lead: str, channel: str,
@@ -103,7 +106,10 @@ def fetch_rain_reports(area_id: str | None = None, limit: int = 100) -> list[dic
     q = sb.table("rain_reports").select("*").order("created_at", desc=True).limit(limit)
     if area_id:
         q = q.eq("area_id", area_id)
-    return q.execute().data or []
+    try:
+        return q.execute().data or []
+    except Exception:
+        return []
 
 
 # --- notifications ------------------------------------------------------------

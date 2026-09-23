@@ -86,6 +86,42 @@ def convert_to_16k_wav(input_bytes: bytes, suffix: str = ".webm") -> bytes | Non
         return None
 
 
+def convert_wav_to_opus_ogg(wav_bytes: bytes) -> bytes | None:
+    """Convert WAV audio bytes to OGG/Opus suitable for WhatsApp voice notes (PTT)."""
+    if not wav_bytes or len(wav_bytes) < 44:
+        return None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as in_f:
+            in_f.write(wav_bytes)
+            in_path = in_f.name
+        out_path = in_path + ".ogg"
+        result = subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", in_path,
+                "-c:a", "libopus",
+                "-b:a", "32k",
+                "-vbr", "on",
+                "-application", "voip",
+                out_path,
+            ],
+            capture_output=True,
+            timeout=30,
+        )
+        if os.path.exists(in_path):
+            os.unlink(in_path)
+        if result.returncode != 0:
+            log.error("[VOICE] ffmpeg WAV to Opus conversion error: %s", result.stderr.decode("utf-8", errors="replace"))
+            return None
+        with open(out_path, "rb") as out_f:
+            ogg_bytes = out_f.read()
+        if os.path.exists(out_path):
+            os.unlink(out_path)
+        return ogg_bytes
+    except Exception as exc:
+        log.exception("[VOICE] Audio conversion to Opus/OGG failed: %s", exc)
+        return None
+
+
 class VoiceProvider(ABC):
     """Abstract base class for speech-to-text and text-to-speech providers."""
 
@@ -183,7 +219,7 @@ class SarvamVoiceProvider(VoiceProvider):
         if "webm" in ext:
             mime = "audio/webm"
             filename = "recording.webm"
-        elif "ogg" in ext:
+        elif "ogg" in ext or "opus" in ext:
             mime = "audio/ogg"
             filename = "recording.ogg"
         elif "mp4" in ext:

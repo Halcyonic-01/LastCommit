@@ -19,8 +19,12 @@ LATEST_FORECAST_FILE = ROOT / "forecast" / "latest.json"
 DEFAULT_AREA_ID = "KGIS-H-180901"  # Kasaba, Tumakuru
 
 
-def load_forecast_for_area(area_id: str | None = None) -> dict[str, Any] | None:
-    """Load area forecast JSON file. Falls back to default area if not found."""
+def load_forecast_for_area(area_id: str | None = None, fallback_default: bool = False) -> dict[str, Any] | None:
+    """Load area forecast JSON file.
+    
+    If area_id is provided, loads that specific area file without cross-area guessing.
+    If area_id is not provided, only falls back to default if fallback_default is True.
+    """
     clean_id = (area_id or "").strip()
     if clean_id:
         target = FORECAST_DIR / f"{clean_id}.json"
@@ -29,27 +33,82 @@ def load_forecast_for_area(area_id: str | None = None) -> dict[str, Any] | None:
                 return json.loads(target.read_text(encoding="utf-8"))
             except Exception as exc:
                 log.warning("[VOICE] Error reading area forecast %s: %s", target, exc)
+                return None
+        if LATEST_FORECAST_FILE.exists():
+            try:
+                data = json.loads(LATEST_FORECAST_FILE.read_text(encoding="utf-8"))
+                areas = data.get("areas", {})
+                if clean_id in areas:
+                    return {"forecast": areas[clean_id], "skill": data.get("skill", {}), "meta": data.get("meta", {})}
+            except Exception as exc:
+                log.warning("[VOICE] Error reading latest.json: %s", exc)
+        return None
 
-    default_file = FORECAST_DIR / f"{DEFAULT_AREA_ID}.json"
-    if default_file.exists():
-        try:
-            return json.loads(default_file.read_text(encoding="utf-8"))
-        except Exception as exc:
-            log.warning("[VOICE] Error reading default area forecast: %s", exc)
+    if fallback_default:
+        default_file = FORECAST_DIR / f"{DEFAULT_AREA_ID}.json"
+        if default_file.exists():
+            try:
+                return json.loads(default_file.read_text(encoding="utf-8"))
+            except Exception as exc:
+                log.warning("[VOICE] Error reading default area forecast: %s", exc)
+    return None
 
-    if LATEST_FORECAST_FILE.exists():
-        try:
-            data = json.loads(LATEST_FORECAST_FILE.read_text(encoding="utf-8"))
-            areas = data.get("areas", {})
-            if clean_id and clean_id in areas:
-                return {"forecast": areas[clean_id], "skill": data.get("skill", {}), "meta": data.get("meta", {})}
-            if DEFAULT_AREA_ID in areas:
-                return {"forecast": areas[DEFAULT_AREA_ID], "skill": data.get("skill", {}), "meta": data.get("meta", {})}
-            if areas:
-                first_key = next(iter(areas))
-                return {"forecast": areas[first_key], "skill": data.get("skill", {}), "meta": data.get("meta", {})}
-        except Exception as exc:
-            log.warning("[VOICE] Error reading latest.json: %s", exc)
+
+_INDEX_AREAS_CACHE: dict[str, Any] | None = None
+
+
+def get_indexed_areas() -> dict[str, Any]:
+    """Return dictionary of all indexed areas from forecast/index.json."""
+    global _INDEX_AREAS_CACHE
+    if _INDEX_AREAS_CACHE is None:
+        index_file = ROOT / "forecast" / "index.json"
+        if index_file.exists():
+            try:
+                data = json.loads(index_file.read_text(encoding="utf-8"))
+                _INDEX_AREAS_CACHE = data.get("areas", {})
+            except Exception as exc:
+                log.warning("[VOICE] Error reading forecast index: %s", exc)
+                _INDEX_AREAS_CACHE = {}
+        else:
+            _INDEX_AREAS_CACHE = {}
+    return _INDEX_AREAS_CACHE
+
+
+def resolve_area_id_from_text(text: str) -> str | None:
+    """Resolve a KGIS area_id from a user's text message mentioning a hobli or area ID."""
+    if not text:
+        return None
+    raw = text.strip()
+    # 1. Regex check for KGIS area ID (e.g. KGIS-H-010901)
+    m = re.search(r"KGIS-[A-Z]-\d{6}", raw, re.IGNORECASE)
+    if m:
+        candidate = m.group(0).upper()
+        if (FORECAST_DIR / f"{candidate}.json").exists() or candidate in get_indexed_areas():
+            return candidate
+
+    areas = get_indexed_areas()
+    clean = raw.lower()
+    clean_norm = clean.replace("bailhongal", "bailahongala")
+
+    # 2. Check full name exact matches against hoblis
+    for aid, info in areas.items():
+        if not aid.startswith("KGIS-H-"):
+            continue
+        name = info.get("name_en", "").strip().lower()
+        district = info.get("district_en", "").strip().lower()
+        if name and name == clean_norm:
+            return aid
+        if name and district and (f"{name} {district}" in clean_norm or f"{name}, {district}" in clean_norm):
+            return aid
+
+    # 3. Check whole word matches
+    for aid, info in areas.items():
+        if not aid.startswith("KGIS-H-"):
+            continue
+        name = info.get("name_en", "").strip().lower()
+        if name and len(name) > 3:
+            if re.search(rf"\b{re.escape(name)}\b", clean_norm):
+                return aid
 
     return None
 
@@ -192,18 +251,62 @@ def generate_grounded_answer(
     if clean_lang not in ("kn", "hi", "te", "en"):
         clean_lang = "kn"
 
+    intent = classify_intent(transcript, clean_lang)
+
+    # 1. Intents that do not need area forecast data
+    if intent == "rain_yes":
+        replies = {
+            "kn": "ಧನ್ಯವಾದ. ನಿಮ್ಮ ಮಳೆ ವರದಿ ದಾಖಲಾಗಿದೆ.",
+            "hi": "धन्यवाद। आपकी बारिश की सूचना दर्ज हो गई।",
+            "te": "ధన్యవాదాలు. మీ వర్షం నివేదిక నమోదైంది.",
+            "en": "Thank you. Your rain report has been recorded.",
+        }
+        return {"action": intent, "reply_text": replies[clean_lang], "grounding_data": {}}
+
+    if intent == "rain_no":
+        replies = {
+            "kn": "ಧನ್ಯವಾದ. ಮಳೆ ಇಲ್ಲ ಎಂದು ದಾಖಲಾಗಿದೆ.",
+            "hi": "धन्यवाद। बारिश नहीं हुई, यह दर्ज हो गया।",
+            "te": "ధన్యవాదాలు. వర్షం లేదని నమోదైంది.",
+            "en": "Thank you. No rain today has been recorded.",
+        }
+        return {"action": intent, "reply_text": replies[clean_lang], "grounding_data": {}}
+
+    if intent == "repeat":
+        replies = {
+            "kn": "ಸಲಹೆ ಮತ್ತೆ ಓದಲಾಗುತ್ತಿದೆ.",
+            "hi": "सलाह फिर से पढ़ी जा रही है।",
+            "te": "సలహా ಮళ్ళీ చదవబడుతోంది.",
+            "en": "Repeating the advisory now.",
+        }
+        return {"action": intent, "reply_text": replies[clean_lang], "grounding_data": {}}
+
+    # 2. Check if area_id is missing for weather & advisory queries
+    if not (area_id or "").strip():
+        prompts = {
+            "kn": "ದಯವಿಟ್ಟು ನಿಮ್ಮ ಹೋಬಳಿ ಅಥವಾ ಗ್ರಾಮದ ಹೆಸರನ್ನು ತಿಳಿಸಿ.",
+            "hi": "कृपया अपनी होबली या गाँव का नाम बताएं।",
+            "te": "దయచేసి మీ హోబ్లీ లేదా గ్రామం పేరు చెప్పండి.",
+            "en": "Please provide your hobli or village name to get the weather forecast.",
+        }
+        return {
+            "action": "missing_location",
+            "reply_text": prompts.get(clean_lang, prompts["kn"]),
+            "grounding_data": {"needs_location": True},
+        }
+
+    # 3. Load forecast for the area
     data = load_forecast_for_area(area_id)
     if not data or "forecast" not in data:
-        # Fallback if forecast data unavailable
         return {
-            "action": "unknown",
+            "action": "forecast_unavailable",
             "reply_text": {
-                "kn": "ಕ್ಷಮಿಸಿ, ಹವಾಮಾನ ಮುನ್ಸೂಚನೆ ಮಾಹಿತಿ ಪಡೆಯಲು ಸಾಧ್ಯವಾಗುತ್ತಿಲ್ಲ.",
-                "hi": "क्षमा करें, मौसम पूर्वानुमान की जानकारी नहीं मिल सकी।",
-                "te": "క్షమించండి, వాతావరణ సమాచారం అందుబాటులో లేదు.",
-                "en": "Sorry, could not load weather forecast information.",
+                "kn": "ಕ್ಷಮಿಸಿ, ಈ ಪ್ರದೇಶದ ಹವಾಮಾನ ಮುನ್ಸೂಚನೆ ಮಾಹಿತಿ ಸದ್ಯಕ್ಕೆ ಲಭ್ಯವಿಲ್ಲ.",
+                "hi": "क्षमा करें, इस क्षेत्र के लिए मौसम पूर्वानुमान की जानकारी अभी उपलब्ध नहीं है।",
+                "te": "క్షమించండి, ఈ ప్రాంతానికి ವಾತಾವరణ సమాచారం ప్రస్తుతం అందుబాటులో లేదు.",
+                "en": "Sorry, weather forecast information is currently unavailable for this area.",
             }[clean_lang],
-            "grounding_data": {},
+            "grounding_data": {"area_id": area_id, "error": "not_found"},
         }
 
     forecast = data["forecast"]
@@ -216,8 +319,6 @@ def generate_grounded_answer(
     ten = max(0, min(10, round(p_dry_w1 * 10)))
     advisories = forecast.get("advisories", [])
     primary_adv = advisories[0] if advisories else None
-
-    intent = classify_intent(transcript, clean_lang)
 
     # 1. Rain Tomorrow / Short-term
     if intent == "rain_tomorrow":
@@ -315,26 +416,6 @@ def generate_grounded_answer(
             "grounding_data": {"p_dry7_w1": p_dry_w1, "rule_id": "midseason.flowering"},
         }
 
-    # 5. Rain Report: Yes
-    if intent == "rain_yes":
-        replies = {
-            "kn": "ಧನ್ಯವಾದ. ನಿಮ್ಮ ಮಳೆ ವರದಿ ದಾಖಲಾಗಿದೆ.",
-            "hi": "धन्यवाद। आपकी बारिश की सूचना दर्ज हो गई।",
-            "te": "ధన్యవాదాలు. మీ వర్షం నివేదిక నమోదైంది.",
-            "en": "Thank you. Your rain report has been recorded.",
-        }
-        return {"action": intent, "reply_text": replies[clean_lang], "grounding_data": {}}
-
-    # 6. Rain Report: No
-    if intent == "rain_no":
-        replies = {
-            "kn": "ಧನ್ಯವಾದ. ಮಳೆ ಇಲ್ಲ ಎಂದು ದಾಖಲಾಗಿದೆ.",
-            "hi": "धन्यवाद। बारिश नहीं हुई, यह दर्ज हो गया।",
-            "te": "ధన్యవాదాలు. వర్షం లేదని నమోదైంది.",
-            "en": "Thank you. No rain today has been recorded.",
-        }
-        return {"action": intent, "reply_text": replies[clean_lang], "grounding_data": {}}
-
     # 7. Sowing / General CRIDA Advisory
     if intent == "advisory":
         if primary_adv:
@@ -353,16 +434,6 @@ def generate_grounded_answer(
             "reply_text": full_text,
             "grounding_data": {"rule_id": primary_adv.get("rule_id") if primary_adv else "default"},
         }
-
-    # 8. Repeat
-    if intent == "repeat":
-        replies = {
-            "kn": "ಸಲಹೆ ಮತ್ತೆ ಓದಲಾಗುತ್ತಿದೆ.",
-            "hi": "सलाह फिर से पढ़ी जा रही है।",
-            "te": "సలహా మళ్ళీ చదవబడుతోంది.",
-            "en": "Repeating the advisory now.",
-        }
-        return {"action": intent, "reply_text": replies[clean_lang], "grounding_data": {}}
 
     # Default / Unknown
     replies = {
