@@ -46,10 +46,36 @@ def phase(oni: float) -> str:
     return "neutral"
 
 
+# Precomputed empirical 34-season (1991-2024) baseline over Karnataka.
+# Used at inference time when the 57 MB features.parquet is not present.
+DEFAULT_HISTORICAL_ENSO = {
+    "el_nino": {
+        "seasons": 6,
+        "mean_anomaly_pct": -10.7,
+        "dry_spell_rate": 0.458,
+    },
+    "la_nina": {
+        "seasons": 6,
+        "mean_anomaly_pct": 6.8,
+        "dry_spell_rate": 0.381,
+    },
+    "neutral": {
+        "seasons": 22,
+        "mean_anomaly_pct": 1.1,
+        "dry_spell_rate": 0.391,
+    },
+    "_correlation": -0.39,
+}
+
+
 def historical_effect(features: pd.DataFrame | None = None) -> dict:
     """What each ENSO phase DID to Karnataka rainfall across our 34 seasons."""
+    feat_path = PROC / "features.parquet"
+    if features is None and not feat_path.exists():
+        return DEFAULT_HISTORICAL_ENSO
+
     df = features if features is not None else pd.read_parquet(
-        PROC / "features.parquet", columns=["year", "rain_1d", "oni", "y_dry7_7"])
+        feat_path, columns=["year", "rain_1d", "oni", "y_dry7_7"])
     g = (df.groupby("year")
            .agg(season_mm=("rain_1d", "mean"), oni=("oni", "mean"),
                 dry_rate=("y_dry7_7", "mean")))

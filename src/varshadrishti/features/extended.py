@@ -126,7 +126,13 @@ def extended_daily() -> pd.DataFrame:
         df = pd.read_parquet(EXTENDED_DAILY_PATH)
         df.index = pd.to_datetime(df.index)
         return df
-    return build_extended_frame()
+    if INDICES_W4_PATH.exists():
+        return build_extended_frame()
+    raise FileNotFoundError(
+        f"Neither frozen extended daily ({EXTENDED_DAILY_PATH.relative_to(ROOT)}) "
+        f"nor raw indices ({INDICES_W4_PATH.relative_to(ROOT)}) were found. "
+        f"Ensure data/processed/extended_daily.parquet is committed or run scripts/export_xgb_tables.py."
+    )
 
 
 def load_ecmwf_features() -> pd.DataFrame | None:
@@ -175,9 +181,15 @@ def apply_train_only_climatology(df: pd.DataFrame,
     df = df.copy().drop(columns=CLIM_COLS)
     if CLIM_TRAIN_PATH.exists() and train_years == TRAIN_YEARS:
         df = df.merge(pd.read_parquet(CLIM_TRAIN_PATH), on=["cell_id", "sday"], how="left")
-    else:
+    elif FEATURES_PATH.exists() and ONSET_LABELS_PATH.exists():
         df = df.merge(_rain_climatology(train_years), on=["cell_id", "sday"], how="left")
         df = df.merge(_onset_climatology(train_years), on="cell_id", how="left")
+    else:
+        raise FileNotFoundError(
+            f"Neither frozen train climatology ({CLIM_TRAIN_PATH.relative_to(ROOT)}) "
+            f"nor training features ({FEATURES_PATH.relative_to(ROOT)}) were found. "
+            f"Ensure data/processed/clim_train_only.parquet is committed or run scripts/export_xgb_tables.py."
+        )
     # the shipped onset_doy_anom is doy minus clim_FIRST_CAND_doy, not clim_onset_doy
     df["onset_doy_anom"] = df["doy"] - df["clim_first_cand_doy"]
     return df

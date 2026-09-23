@@ -429,8 +429,13 @@ def test_mjo_is_in_the_model_and_enso_iod_are_not():
     P(worse) up to 1.000. Each index acts at the timescale where it works."""
     from varshadrishti.model import train as T  # noqa: PLC0415
 
-    df = pd.read_parquet(PROC / "features.parquet")
-    feats = T.feature_names(df)
+    feat_path = PROC / "features.parquet"
+    if feat_path.exists():
+        df = pd.read_parquet(feat_path)
+        feats = T.feature_names(df)
+    else:
+        with open(ROOT / "models" / "xgb" / "events" / "dry7_7d" / "features.json") as f:
+            feats = json.load(f)
     assert "rmm1" in feats and "mjo_amp" in feats, "MJO must be in the model"
     assert not ({"oni", "dmi", "nino34_anom"} & set(feats)), "ENSO/IOD must not be"
 

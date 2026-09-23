@@ -40,6 +40,22 @@ jobs:
         run: python scripts/fetch_nwp.py
         continue-on-error: true   # a stale cached run still produces a forecast
 
+      - name: Verify inference artifacts
+        run: |
+          set -eux
+          required=(
+            data/processed/inference_tables.parquet
+            data/processed/clim_train_only.parquet
+            data/processed/extended_daily.parquet
+            data/processed/weights_imd_hoblis.parquet
+          )
+          for file in "${required[@]}"; do
+            test -s "$file" || {
+              echo "::error file=$file::$file is missing or empty"
+              exit 1
+            }
+          done
+
       - name: Run the nightly pipeline
         run: |
           DATE="${{ github.event.inputs.as_of }}"
